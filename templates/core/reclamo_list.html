@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Reclamos y felicitaciones{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Reclamos y felicitaciones</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'reclamo_create' %}">Nuevo</a>
+</div>
+
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Tipo</th><th>Canal</th><th>Delegación</th><th>Funcionario</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for o in registros %}
+    <tr><td class="fw-bold">{{ o.get_tipo_display }}</td><td>{{ o.get_canal_display }}</td>
+      <td>{{ o.delegacion }}</td><td>{{ o.funcionario|default:"—" }}</td><td>{{ o.fecha|date:"d/m/Y" }}</td>
+      <td>{{ o.get_estado_display }}</td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'reclamo_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'reclamo_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

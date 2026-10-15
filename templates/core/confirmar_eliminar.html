@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titulo %}Eliminar{% endblock %}
+{% block contenido %}
+<div class="row justify-content-center"><div class="col-lg-6">
+  <div class="card border-danger"><div class="card-body p-4">
+    <h1 class="h5">¿Eliminar este registro?</h1>
+    <p class="mb-4">Se eliminará <strong>{{ object }}</strong>. Esta acción no se puede deshacer.</p>
+    <form method="post">{% csrf_token %}
+      <button class="btn btn-danger">Sí, eliminar</button>
+      <a class="btn btn-outline-secondary" href="javascript:history.back()">Cancelar</a>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

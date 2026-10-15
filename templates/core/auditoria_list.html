@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Auditoría{% endblock %}
+{% block contenido %}
+<h1 class="h3">Registro de auditoría</h1>
+<p class="text-muted">Operaciones críticas del sistema: quién, qué y cuándo.</p>
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Fecha</th><th>Usuario</th><th>Evento</th><th>Entidad</th><th>Registro</th><th>Detalle</th></tr></thead>
+  <tbody>
+  {% for e in eventos %}
+    <tr><td>{{ e.fecha|date:"d/m/Y H:i" }}</td><td>{{ e.funcionario|default:"—" }}</td>
+      <td>{{ e.evento }}</td><td>{{ e.entidad }}</td><td>{{ e.registro_id }}</td>
+      <td>{{ e.detalle|truncatechars:60 }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="text-muted">Sin eventos registrados.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

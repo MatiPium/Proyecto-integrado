@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Revisar evidencia{% endblock %}
+{% block contenido %}
+<h1 class="h3">Evidencia {{ evidencia.codigo }}</h1>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-body">
+    {% if evidencia.archivo %}<img src="{{ evidencia.archivo.url }}" class="img-fluid rounded mb-3" alt="Evidencia">{% endif %}
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Funcionario</dt><dd class="col-sm-8">{{ evidencia.actividad.funcionario }}</dd>
+      <dt class="col-sm-4">Fecha</dt><dd class="col-sm-8">{{ evidencia.actividad.fecha|date:"d/m/Y" }}</dd>
+      <dt class="col-sm-4">Ítem</dt><dd class="col-sm-8">{{ evidencia.actividad.item.nombre }}</dd>
+      <dt class="col-sm-4">Solicitud</dt><dd class="col-sm-8">{{ evidencia.actividad.solicitud }}</dd>
+      <dt class="col-sm-4">Acción</dt><dd class="col-sm-8">{{ evidencia.actividad.accion }}</dd>
+    </dl>
+  </div></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-body">
+    <h2 class="h6">Decisión</h2>
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      {% for campo in form %}
+        <div class="mb-3"><label class="form-label">{{ campo.label }}</label>{{ campo }}
+          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+      {% endfor %}
+      <button class="btn btn-primary" style="background:#1E2761;border:0">Guardar decisión</button>
+    </form>
+    <p class="text-muted small mt-3 mb-0">El rechazo requiere observación y notifica al funcionario. Tu decisión queda en auditoría.</p>
+  </div></div></div>
+</div>
+{% endblock %}

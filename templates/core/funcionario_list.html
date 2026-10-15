@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Funcionarios{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Funcionarios</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'funcionario_create' %}">Nuevo</a>
+</div>
+<form class="row g-2 mb-3"><div class="col-auto">
+  <input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar..."></div>
+  <div class="col-auto"><button class="btn btn-outline-secondary">Buscar</button></div></form>
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Funcionario</th><th>Usuario</th><th>Delegación</th><th>Cargo</th><th>Rol</th><th></th></tr></thead>
+  <tbody>
+  {% for o in funcionarios %}
+    <tr><td class="fw-bold">{{ o.get_full_name|default:"—" }}</td><td>{{ o.username }}</td>
+      <td>{{ o.delegacion|default:"—" }}</td><td>{{ o.cargo|default:"—" }}</td><td>{{ o.rol|default:"—" }}</td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'funcionario_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'funcionario_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

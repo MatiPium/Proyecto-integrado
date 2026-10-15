@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Ingresar{% endblock %}
+{% block contenido %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-5">
+    <div class="card shadow-sm"><div class="card-body p-4">
+      <h1 class="h4 mb-1">Sistema de Gestión de Resultados</h1>
+      <p class="text-muted small">Delegaciones Municipales de La Serena</p>
+      {% if form.errors %}<div class="alert alert-danger">Usuario o contraseña incorrectos.</div>{% endif %}
+      <form method="post">{% csrf_token %}
+        <div class="mb-3"><label class="form-label">Usuario</label>{{ form.username }}</div>
+        <div class="mb-3"><label class="form-label">Contraseña</label>{{ form.password }}</div>
+        <button class="btn btn-primary w-100" style="background:#1E2761;border:0">Ingresar</button>
+      </form>
+      <p class="text-muted small mt-3 mb-0">El acceso es personal y queda registrado con tu usuario, fecha y hora.</p>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

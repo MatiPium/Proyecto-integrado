@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Delegaciones{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Delegaciones</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'delegacion_create' %}">Nuevo</a>
+</div>
+<form class="row g-2 mb-3"><div class="col-auto">
+  <input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar..."></div>
+  <div class="col-auto"><button class="btn btn-outline-secondary">Buscar</button></div></form>
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Nombre</th><th>Sector</th><th>Funcionarios</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for o in delegaciones %}
+    <tr><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.sector|default:"—" }}</td>
+      <td>{{ o.total }}</td><td>{% if o.activa %}<span class="badge bg-success">Activa</span>{% else %}<span class="badge bg-secondary">Inactiva</span>{% endif %}</td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'delegacion_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'delegacion_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Períodos{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Períodos</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'periodo_create' %}">Nuevo</a>
+</div>
+
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Período</th><th>Inicio</th><th>Término</th><th>Avance esperado</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for o in periodos %}
+    <tr><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.fecha_inicio|date:"d/m/Y" }}</td>
+      <td>{{ o.fecha_termino|date:"d/m/Y" }}</td><td>{{ o.avance_esperado }}%</td>
+      <td>{% if o.abierto %}Abierto{% else %}Cerrado{% endif %}</td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'periodo_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'periodo_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

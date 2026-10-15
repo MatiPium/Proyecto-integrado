@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Ítems medibles{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Ítems medibles</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'item_create' %}">Nuevo</a>
+</div>
+
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Ítem</th><th>Cargo</th><th>Unidad</th><th>Ponderador</th><th></th></tr></thead>
+  <tbody>
+  {% for o in items %}
+    <tr><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.cargo }}</td>
+      <td>{{ o.unidad }}</td><td>{{ o.ponderador }}%</td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'item_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'item_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

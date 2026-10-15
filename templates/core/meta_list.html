@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Metas del período{% endblock %}
+{% block contenido %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h3 mb-0">Metas del período</h1>
+  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'meta_create' %}">Nuevo</a>
+</div>
+
+<div class="card"><table class="table mb-0">
+  <thead><tr><th>Funcionario</th><th>Ítem</th><th>Período</th><th>Meta</th><th>Avance</th><th>Cumplimiento</th><th></th></tr></thead>
+  <tbody>
+  {% for o in metas %}
+    <tr><td class="fw-bold">{{ o.funcionario }}</td><td>{{ o.item.nombre }}</td>
+      <td>{{ o.periodo }}</td><td>{{ o.valor_objetivo }}</td><td>{{ o.avance }}</td>
+      <td><span class="badge badge-{{ o.semaforo }}">{{ o.cumplimiento }}%</span></td>
+      <td class="text-end">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'meta_update' o.pk %}">Editar</a>
+        <a class="btn btn-sm btn-outline-danger" href="{% url 'meta_delete' o.pk %}">Eliminar</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="text-muted">No hay registros todavía.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% include "core/_paginacion.html" %}
+{% endblock %}

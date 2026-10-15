@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titulo %}Actividad{% endblock %}
+{% block contenido %}
+<h1 class="h3">Actividad del {{ actividad.fecha|date:"d/m/Y" }}</h1>
+<p class="text-muted">{{ actividad.funcionario }} · {{ actividad.item.nombre }}</p>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Tipo de atención</dt><dd class="col-sm-8">{{ actividad.tipo_atencion|default:"—" }}</dd>
+      <dt class="col-sm-4">Solicitud</dt><dd class="col-sm-8">{{ actividad.solicitud }}</dd>
+      <dt class="col-sm-4">Acción ejecutada</dt><dd class="col-sm-8">{{ actividad.accion }}</dd>
+      <dt class="col-sm-4">Contacto</dt><dd class="col-sm-8">{{ actividad.contacto_nombre|default:"—" }} {{ actividad.contacto_telefono }}</dd>
+      <dt class="col-sm-4">Agenda colectiva</dt><dd class="col-sm-8">{{ actividad.ingresa_agenda|yesno:"Sí,No" }}</dd>
+    </dl>
+  </div></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-body">
+    <h2 class="h6">Evidencias</h2>
+    <ul class="list-group list-group-flush mb-3">
+      {% for e in actividad.evidencias.all %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span><strong>{{ e.codigo }}</strong> · {{ e.get_momento_display }}</span>
+          <span class="badge {% if e.estado == 'APR' %}badge-verde{% elif e.estado == 'REC' %}badge-rojo{% else %}badge-ambar{% endif %}">{{ e.get_estado_display }}</span>
+        </li>
+      {% empty %}<li class="list-group-item text-muted">Sin evidencias cargadas.</li>{% endfor %}
+    </ul>
+    <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}
+      {% for campo in form_evidencia %}
+        <div class="mb-2"><label class="form-label">{{ campo.label }}</label>{{ campo }}
+          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+      {% endfor %}
+      <button class="btn btn-sm btn-primary" style="background:#1E2761;border:0">Cargar evidencia</button>
+    </form>
+  </div></div></div>
+</div>
+{% endblock %}

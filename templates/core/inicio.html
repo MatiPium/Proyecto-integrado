@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Mi tablero{% endblock %}
+{% block contenido %}
+<h1 class="h3">Hola, {{ user.first_name|default:user.username }}</h1>
+<p class="text-muted">{{ user.cargo|default:"Sin cargo" }} · {{ user.delegacion|default:"Sin delegación" }}
+  {% if periodo %}· {{ periodo }} (esperado al día de hoy: {{ periodo.avance_esperado }}%){% endif %}</p>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="card"><div class="card-body">
+    <div class="text-muted small">Cumplimiento ponderado</div>
+    <div class="display-6 fw-bold">{{ cumplimiento_total }}%</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body">
+    <div class="text-muted small">Evidencias pendientes de verificar</div>
+    <div class="display-6 fw-bold">{{ pendientes }}</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body">
+    <div class="text-muted small">Compromisos abiertos</div>
+    <div class="display-6 fw-bold">{{ compromisos }}</div></div></div></div>
+</div>
+
+<div class="card mb-4"><div class="card-header bg-white fw-bold">Cumplimiento por ítem</div>
+<table class="table mb-0">
+  <thead><tr><th>Ítem</th><th class="text-end">Ponderador</th><th class="text-end">Meta</th>
+    <th class="text-end">Avance</th><th class="text-end">Cumplimiento</th><th>Semáforo</th></tr></thead>
+  <tbody>
+  {% for m in metas %}
+    <tr><td>{{ m.item.nombre }}</td><td class="text-end">{{ m.item.ponderador }}%</td>
+      <td class="text-end">{{ m.valor_objetivo }}</td><td class="text-end">{{ m.avance }}</td>
+      <td class="text-end fw-bold">{{ m.cumplimiento }}%</td>
+      <td><span class="badge badge-{{ m.semaforo }}">{{ m.semaforo }}</span></td></tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">Aún no tienes metas definidas para el período.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<div class="card"><div class="card-header bg-white fw-bold d-flex justify-content-between">
+  <span>Últimas actividades</span>
+  <a href="{% url 'actividad_create' %}">Registrar actividad</a></div>
+<table class="table mb-0">
+  <thead><tr><th>Fecha</th><th>Ítem</th><th>Solicitud</th><th>Evidencia</th></tr></thead>
+  <tbody>
+  {% for a in actividades %}
+    <tr><td>{{ a.fecha|date:"d/m/Y" }}</td><td>{{ a.item.nombre }}</td>
+      <td>{{ a.solicitud|truncatechars:60 }}</td><td>{{ a.estado_evidencia }}</td></tr>
+  {% empty %}<tr><td colspan="4" class="text-muted">Todavía no registras actividades.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

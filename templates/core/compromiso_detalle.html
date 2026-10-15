@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Compromiso{% endblock %}
+{% block contenido %}
+<h1 class="h3">{{ compromiso.descripcion }}</h1>
+<p class="text-muted">{{ compromiso.delegacion }} · responsable {{ compromiso.responsable }} ·
+  plazo {{ compromiso.fecha_comprometida|date:"d/m/Y" }}
+  {% if compromiso.vencido %}<span class="badge badge-rojo">Vencido</span>{% endif %}</p>
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-header bg-white fw-bold">Historial de cambios</div>
+    <ul class="list-group list-group-flush">
+      {% for h in historial %}
+        <li class="list-group-item">
+          <div class="fw-semibold">{{ h.get_estado_anterior_display|default:"Creado" }} → {{ h.get_estado_nuevo_display }}</div>
+          <div class="small text-muted">{{ h.autor }} · {{ h.fecha|date:"d/m/Y H:i" }}</div>
+          <div class="small">{{ h.observacion }}</div>
+        </li>
+      {% empty %}<li class="list-group-item text-muted">Sin cambios registrados.</li>{% endfor %}
+    </ul></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-body">
+    <h2 class="h6">Cambiar estado</h2>
+    <form method="post" novalidate>{% csrf_token %}
+      {% for campo in form %}
+        <div class="mb-3"><label class="form-label">{{ campo.label }}</label>{{ campo }}
+          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+      {% endfor %}
+      <button class="btn btn-primary" style="background:#1E2761;border:0">Guardar cambio de estado</button>
+      <a class="btn btn-outline-secondary" href="{% url 'compromiso_update' compromiso.pk %}">Editar compromiso</a>
+    </form>
+  </div></div></div>
+</div>
+{% endblock %}

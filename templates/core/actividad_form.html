@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar actividad{% endblock %}
+{% block contenido %}
+<div class="row justify-content-center"><div class="col-lg-9">
+  <h1 class="h3 mb-1">{% if object %}Editar actividad{% else %}Registrar actividad{% endif %}</h1>
+  <p class="text-muted">Los campos obligatorios se validan antes de guardar. El código de evidencia se genera solo.</p>
+  <div class="card"><div class="card-body p-4">
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      <div class="row g-3">
+        {% for campo in form %}
+          <div class="{% if campo.name in 'solicitud accion' %}col-12{% else %}col-md-6{% endif %}">
+            <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+            {{ campo }}
+            {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4">
+        <button class="btn btn-primary" style="background:#1E2761;border:0">Guardar actividad</button>
+        <a class="btn btn-outline-secondary" href="{% url 'actividad_list' %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}

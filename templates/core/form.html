@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}{{ view.model|default:"Formulario" }}{% endblock %}
+{% block contenido %}
+<div class="row justify-content-center"><div class="col-lg-8">
+  <div class="card"><div class="card-body p-4">
+    <h1 class="h4 mb-3">{% if object %}Editar{% else %}Nuevo registro{% endif %}</h1>
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <form method="post" novalidate>{% csrf_token %}
+      {% for campo in form %}
+        <div class="mb-3">
+          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          {{ campo }}
+          {% if campo.help_text %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
+          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+      <button class="btn btn-primary" style="background:#1E2761;border:0">Guardar</button>
+      <a class="btn btn-outline-secondary" href="javascript:history.back()">Cancelar</a>
+    </form>
+  </div></div>
+</div></div>
+{% endblock %}
