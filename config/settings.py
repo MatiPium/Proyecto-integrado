@@ -20,12 +20,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m9s+(kccg%3ilru69%8eueol#khx4ljx0mx#9m^w*3irza+rm3'
+import os
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'clave-desarrollo-local-insegura-crear-clave-aleatoria-para-servidor-produccion')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS','127.0.0.1,localhost').split(',') if h.strip()]
 
 
 # Application definition
@@ -151,3 +152,14 @@ MEDIA_ROOT = BASE_DIR / "media"
 #         "PORT": "3306",
 #     }
 # }
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Recuperación: consola en desarrollo; configurar SMTP para envío real.
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'SGR <no-reply@localhost>')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS','1') == '1'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True

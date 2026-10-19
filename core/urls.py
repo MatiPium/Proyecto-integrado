@@ -71,3 +71,27 @@ urlpatterns = [
     path("indicadores/", views.IndicadoresView.as_view(), name="indicadores"),
     path("auditoria/", views.AuditoriaList.as_view(), name="auditoria"),
 ]
+
+
+# Módulos de la entrega II (nombres de rutas independientes de los CRUD anteriores)
+from . import segunda_views as sv
+for _clave in sv.CATALOGOS:
+    _lista,_crear,_editar=sv.catalogo_clases(_clave)
+    urlpatterns.extend([
+        path(f'mantenedores/{_clave}/',_lista.as_view(),name=f'{_clave}_list'),
+        path(f'mantenedores/{_clave}/nuevo/',_crear.as_view(),name=f'{_clave}_create'),
+        path(f'mantenedores/{_clave}/<int:pk>/editar/',_editar.as_view(),name=f'{_clave}_edit'),
+        path(f'mantenedores/{_clave}/<int:pk>/desactivar/',sv.catalogo_desactivar,{'clave':_clave},name=f'{_clave}_disable'),
+        path(f'mantenedores/{_clave}/excel/',sv.exportar_catalogo,{'clave':_clave},name=f'{_clave}_excel'),
+    ])
+urlpatterns += [
+    path('atenciones/',sv.AtencionList.as_view(),name='atencion_list'),
+    path('atenciones/nueva/',sv.AtencionCreate.as_view(),name='atencion_create'),
+    path('api/subatenciones/',sv.subatenciones_json,name='subatenciones_json'),
+    path('contexto/delegacion/',sv.cambiar_delegacion,name='cambiar_delegacion'),
+    path('recuperar/',sv.recuperar_solicitar,name='recuperar_solicitar'),
+    path('recuperar/codigo/',sv.recuperar_validar,name='recuperar_validar'),
+    path('recuperar/nueva-clave/',sv.recuperar_nueva,name='recuperar_nueva'),
+]
+
+urlpatterns += [path('funcionarios/excel/',sv.exportar_usuarios,name='usuarios_excel')]

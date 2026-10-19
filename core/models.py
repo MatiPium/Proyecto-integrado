@@ -20,6 +20,9 @@ class Delegacion(models.Model):
 
     nombre = models.CharField("nombre", max_length=80, unique=True)
     sector = models.CharField("sector", max_length=120, blank=True)
+    codigo = models.CharField(max_length=20, blank=True, default="")
+    direccion = models.CharField(max_length=180, blank=True, default="")
+    comuna = models.CharField(max_length=100, blank=True, default="La Serena")
     activa = models.BooleanField("activa", default=True)
 
     class Meta:
@@ -57,6 +60,8 @@ class Rol(models.Model):
 
     codigo = models.CharField("código", max_length=5, choices=OPCIONES, unique=True)
     descripcion = models.CharField("descripción", max_length=200, blank=True)
+    activo = models.BooleanField(default=True)
+    permisos_descripcion = models.TextField(blank=True, help_text="Resumen informativo; autorización según perfil en servidor.")
 
     class Meta:
         verbose_name = "rol"
@@ -99,6 +104,8 @@ class Item(models.Model):
         validators=[MinValueValidator(0.01), MaxValueValidator(100)],
     )
     vigente = models.BooleanField("vigente", default=True)
+    codigo = models.CharField(max_length=20, blank=True, default="")
+    descripcion = models.CharField(max_length=250, blank=True, default="")
 
     class Meta:
         verbose_name = "ítem"
@@ -182,6 +189,7 @@ class Funcionario(AbstractUser):
     rol = models.ForeignKey(Rol, on_delete=models.PROTECT, null=True, blank=True,
                             related_name="funcionarios", verbose_name="rol")
     telefono = models.CharField("teléfono", max_length=20, blank=True)
+    delegaciones_autorizadas = models.ManyToManyField(Delegacion, blank=True, related_name="usuarios_autorizados")
 
     class Meta:
         verbose_name = "funcionario"
@@ -514,3 +522,51 @@ class Auditoria(models.Model):
 
     def __str__(self):
         return f"{self.fecha:%d/%m/%Y %H:%M} · {self.evento} · {self.entidad}"
+
+
+# --- Módulos de segunda evaluación ---
+class TipoAtencion(models.Model):
+    codigo = models.CharField(max_length=20, unique=True)
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.CharField(max_length=250, blank=True)
+    activo = models.BooleanField(default=True)
+    def __str__(self): return self.nombre
+    class Meta: ordering = ['nombre']; verbose_name = 'tipo de atención'
+
+class SubAtencion(models.Model):
+    codigo = models.CharField(max_length=20, unique=True)
+    nombre = models.CharField(max_length=100)
+    tipo = models.ForeignKey(TipoAtencion, on_delete=models.PROTECT, related_name='subatenciones')
+    activo = models.BooleanField(default=True)
+    def __str__(self): return f'{self.tipo} · {self.nombre}'
+    class Meta: ordering = ['nombre']; verbose_name = 'subatención'
+
+class AtencionCiudadana(models.Model):
+    solicitante = models.CharField(max_length=160)
+    contacto = models.CharField(max_length=100, blank=True)
+    tipo = models.ForeignKey(TipoAtencion, on_delete=models.PROTECT)
+    subatencion = models.ForeignKey(SubAtencion, on_delete=models.PROTECT)
+    descripcion = models.TextField()
+    delegacion = models.ForeignKey(Delegacion, on_delete=models.PROTECT)
+    responsable = models.ForeignKey(Funcionario, on_delete=models.PROTECT)
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+    def __str__(self): return f'AT-{self.pk or "nuevo"} · {self.solicitante}'
+    def clean(self):
+        super().clean()
+        if self.tipo_id and self.subatencion_id and self.subatencion.tipo_id != self.tipo_id:
+            raise ValidationError({'subatencion':'No corresponde al tipo de atención elegido.'})
+        if self.tipo_id and not self.tipo.activo:
+            raise ValidationError({'tipo':'Tipo de atención inactivo.'})
+        if self.subatencion_id and not self.subatencion.activo:
+            raise ValidationError({'subatencion':'Subatención inactiva.'})
+    class Meta: ordering = ['-fecha_registro']
+
+class CodigoRecuperacion(models.Model):
+    usuario = models.ForeignKey(Funcionario, on_delete=models.CASCADE)
+    hash_codigo = models.CharField(max_length=128)
+    creado = models.DateTimeField(default=timezone.now)
+    vence = models.DateTimeField()
+    intentos = models.PositiveSmallIntegerField(default=0)
+    verificado = models.BooleanField(default=False)
+    utilizado = models.BooleanField(default=False)
+    class Meta: ordering = ['-creado']

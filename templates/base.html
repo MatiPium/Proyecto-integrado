@@ -27,9 +27,16 @@
       <a class="nav-link" href="{% url 'compromiso_list' %}">Agenda colectiva</a>
       <a class="nav-link" href="{% url 'reclamo_list' %}">Reclamos</a>
       <a class="nav-link" href="{% url 'indicadores' %}">Indicadores</a>
-      <a class="nav-link" href="{% url 'delegacion_list' %}">Administración</a>
+      <a class="nav-link" href="{% url 'delegaciones_list' %}">Delegaciones</a>
+      <a class="nav-link" href="{% url 'roles_list' %}">Roles</a>
+      <a class="nav-link" href="{% url 'funcionario_list' %}">Usuarios</a>
+      <a class="nav-link" href="{% url 'items_list' %}">Ítems</a>
+      <a class="nav-link" href="{% url 'tipos_list' %}">Tipos</a>
+      <a class="nav-link" href="{% url 'subatenciones_list' %}">Subatenciones</a>
+      <a class="nav-link" href="{% url 'atencion_list' %}">Atenciones</a>
     </div>
-    <span class="text-white-50 small me-3">{{ user }} · {{ user.rol|default:"sin rol" }}</span>
+    <span class="text-white-50 small me-3">{{ user }} · {{ user.rol|default:"sin rol" }} · {{ user.delegacion|default:"Sin delegación" }}</span>
+    {% if user.delegaciones_autorizadas.exists %}<form method="post" action="{% url 'cambiar_delegacion' %}" class="d-flex align-items-center me-2" onsubmit="return confirm('¿Cambiar de delegación? Los datos del formulario sin guardar se perderán.')">{% csrf_token %}<label class="visually-hidden" for="cambiar-delegacion">Delegación activa</label><select class="form-select form-select-sm" id="cambiar-delegacion" name="delegacion" onchange="this.form.submit()"><option value="">Cambiar delegación</option>{% for d in user.delegaciones_autorizadas.all %}<option value="{{ d.pk }}">{{ d.codigo }} {{ d.nombre }}</option>{% endfor %}</select></form>{% endif %}
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <button class="btn btn-sm btn-outline-light">Cerrar sesión</button>
     </form>
@@ -45,5 +52,7 @@
   {% block contenido %}{% endblock %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% if messages %}<script>{% for m in messages %}if(window.Swal){Swal.fire({text:'{{ m|escapejs }}',icon:'{% if m.tags == "error" %}error{% elif m.tags == "success" %}success{% else %}info{% endif %}',timer:3500,showConfirmButton:false});}{% endfor %}</script>{% endif %}
 </body>
 </html>

@@ -83,7 +83,8 @@ class InicioView(LoginRequiredMixin, TemplateView):
 
 
 # ----------------------------------------------------------------- delegaciones
-class DelegacionList(LoginRequiredMixin, ListView):
+class DelegacionList(RolRequeridoMixin, ListView):
+    roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR)
     model = Delegacion
     template_name = "core/delegacion_list.html"
     context_object_name = "delegaciones"
@@ -152,7 +153,8 @@ class CargoDelete(RolRequeridoMixin, DeleteView):
 
 
 # ------------------------------------------------------------------------ ítems
-class ItemList(LoginRequiredMixin, ListView):
+class ItemList(RolRequeridoMixin, ListView):
+    roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR)
     model = Item
     template_name = "core/item_list.html"
     context_object_name = "items"

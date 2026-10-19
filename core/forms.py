@@ -32,7 +32,7 @@ class BootstrapMixin:
 class DelegacionForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Delegacion
-        fields = ["nombre", "sector", "activa"]
+        fields = ["codigo", "nombre", "direccion", "comuna", "sector", "activa"]
 
 
 class CargoForm(BootstrapMixin, forms.ModelForm):
@@ -44,7 +44,7 @@ class CargoForm(BootstrapMixin, forms.ModelForm):
 class ItemForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Item
-        fields = ["cargo", "nombre", "unidad", "ponderador", "vigente"]
+        fields = ["codigo", "cargo", "nombre", "descripcion", "unidad", "ponderador", "vigente"]
 
 
 class PeriodoForm(BootstrapMixin, forms.ModelForm):
@@ -62,7 +62,7 @@ class FuncionarioForm(BootstrapMixin, UserCreationForm):
 
     class Meta:
         model = Funcionario
-        fields = ["username", "first_name", "last_name", "email", "telefono", "delegacion", "cargo", "rol"]
+        fields = ["username", "first_name", "last_name", "email", "telefono", "delegacion", "delegaciones_autorizadas", "cargo", "rol"]
 
     def clean_email(self):
         email = (self.cleaned_data.get("email") or "").strip().lower()
@@ -80,7 +80,7 @@ class FuncionarioEditForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Funcionario
         fields = ["username", "first_name", "last_name", "email", "telefono",
-                  "delegacion", "cargo", "rol", "is_active"]
+                  "delegacion", "delegaciones_autorizadas", "cargo", "rol", "is_active"]
 
     clean_email = FuncionarioForm.clean_email
 
@@ -222,3 +222,29 @@ class ReclamoFelicitacionForm(BootstrapMixin, forms.ModelForm):
         model = ReclamoFelicitacion
         fields = ["tipo", "canal", "delegacion", "funcionario", "vecino", "descripcion", "estado"]
         widgets = {"descripcion": forms.Textarea(attrs={"rows": 3})}
+
+
+from .models import TipoAtencion, SubAtencion, AtencionCiudadana, Rol
+class TipoAtencionForm(BootstrapMixin, forms.ModelForm):
+    class Meta: model = TipoAtencion; fields = ['codigo','nombre','descripcion','activo']
+class SubAtencionForm(BootstrapMixin, forms.ModelForm):
+    class Meta: model = SubAtencion; fields = ['codigo','nombre','tipo','activo']
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.fields['tipo'].queryset = TipoAtencion.objects.filter(activo=True) | TipoAtencion.objects.filter(pk=getattr(self.instance,'tipo_id',None))
+class RolForm(BootstrapMixin, forms.ModelForm):
+    class Meta: model = Rol; fields = ['codigo','descripcion','activo','permisos_descripcion']
+class AtencionCiudadanaForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = AtencionCiudadana
+        fields = ['solicitante','contacto','tipo','subatencion','descripcion']
+        widgets = {'descripcion':forms.Textarea(attrs={'rows':4})}
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.fields['tipo'].queryset = TipoAtencion.objects.filter(activo=True)
+        self.fields['subatencion'].queryset = SubAtencion.objects.filter(activo=True)
+    def clean(self):
+        d=super().clean();tipo=d.get('tipo');sub=d.get('subatencion')
+        if tipo and sub and sub.tipo_id != tipo.pk:
+            self.add_error('subatencion','La subatención no corresponde al tipo elegido.')
+        return d
