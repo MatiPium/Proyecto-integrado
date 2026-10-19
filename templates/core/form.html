@@ -1,22 +1,13 @@
 {% extends "base.html" %}
-{% block titulo %}Formulario SGR{% endblock %}
+{% block titulo %}{{ ui_title }}{% endblock %}
 {% block contenido %}
-<div class="row justify-content-center"><div class="col-lg-8">
-  <div class="card"><div class="card-body p-4">
-    <h1 class="h4 mb-3">{% if object %}Editar{% else %}Nuevo registro{% endif %}</h1>
-    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
-    <form method="post" novalidate>{% csrf_token %}
-      {% for campo in form %}
-        <div class="mb-3">
-          <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
-          {{ campo }}
-          {% if campo.help_text %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
-          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-        </div>
-      {% endfor %}
-      <button class="btn btn-primary" style="background:#1E2761;border:0">Guardar</button>
-      <a class="btn btn-outline-secondary" href="javascript:history.back()">Cancelar</a>
-    </form>
-  </div></div>
-</div></div>
+<section class="panel form-panel">
+  <h2>{% if object %}Editar registro{% elif request.resolver_match.url_name == 'meta_create' %}Nueva meta de gestión{% elif request.resolver_match.url_name == 'reclamo_create' %}Nuevo registro ciudadano{% else %}Nuevo registro{% endif %}</h2>
+  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+  <form method="post" novalidate>{% csrf_token %}
+    <div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
+    <p class="form-note small">Los campos marcados con * son obligatorios.</p>
+    <div class="form-actions"><a class="btn btn-secondary" href="{% url ui_back_route %}">Cancelar</a><button class="btn btn-primary" type="submit">Guardar{% if request.resolver_match.url_name == 'meta_create' %} configuración{% endif %}</button></div>
+  </form>
+</section>
 {% endblock %}

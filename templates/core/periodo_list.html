@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Períodos{% endblock %}
 {% block contenido %}
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h3 mb-0">Períodos</h1>
-  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'periodo_create' %}">Nuevo</a>
+<section class="panel">
+<div class="panel-header">
+  <h2 class="h4 mb-0">Períodos</h2>
+  <a class="btn btn-primary ms-auto" href="{% url 'periodo_create' %}">+ Nuevo registro</a>
 </div>
 
-<div class="card"><table class="table mb-0">
+<div class="table-responsive"><table class="table mb-0">
   <thead><tr><th>Período</th><th>Inicio</th><th>Término</th><th>Avance esperado</th><th>Estado</th><th></th></tr></thead>
   <tbody>
   {% for o in periodos %}
@@ -19,9 +20,10 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="6" class="text-muted">No hay registros todavía.</td></tr>
+    <tr><td colspan="6" class="empty-state">No hay registros todavía.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>
 {% include "core/_paginacion.html" %}
+</section>
 {% endblock %}

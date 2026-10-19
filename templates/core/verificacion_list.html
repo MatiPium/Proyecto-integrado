@@ -1,16 +1,12 @@
 {% extends "base.html" %}
-{% block titulo %}Verificar evidencias{% endblock %}
+{% block titulo %}Evidencias pendientes{% endblock %}
 {% block contenido %}
-<h1 class="h3">Verificar evidencias</h1>
-<p class="text-muted">Solo las evidencias aprobadas suman al avance del funcionario.</p>
-<div class="card"><table class="table mb-0">
-  <thead><tr><th>Código</th><th>Funcionario</th><th>Ítem</th><th>Fecha</th><th></th></tr></thead>
-  <tbody>
-  {% for e in evidencias %}
-    <tr><td class="fw-bold">{{ e.codigo }}</td><td>{{ e.actividad.funcionario }}</td>
-      <td>{{ e.actividad.item.nombre }}</td><td>{{ e.cargada_en|date:"d/m/Y H:i" }}</td>
-      <td class="text-end"><a class="btn btn-sm btn-primary" style="background:#1E2761;border:0" href="{% url 'verificacion_detalle' e.pk %}">Revisar</a></td></tr>
-  {% empty %}<tr><td colspan="5" class="text-muted">No hay evidencias pendientes de revisión.</td></tr>{% endfor %}
-  </tbody>
-</table></div>
+<section class="panel">
+  <div class="panel-header"><h2>Bandeja de verificación</h2><span class="badge badge-ambar">Pendientes de revisión</span></div>
+  <div class="table-responsive"><table class="table"><thead><tr><th>Código</th><th>Funcionario</th><th>Actividad</th><th>Fecha</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead><tbody>
+    {% for e in evidencias %}<tr><td class="fw-semibold">{{ e.codigo }}</td><td>{{ e.actividad.funcionario }}</td><td>{{ e.actividad.item.nombre }}</td><td>{{ e.cargada_en|date:'d/m/Y' }}</td><td><span class="badge badge-ambar">{{ e.get_estado_display }}</span></td><td class="text-end"><a class="btn btn-sm btn-primary" href="{% url 'verificacion_detalle' e.pk %}">Revisar</a></td></tr>
+    {% empty %}<tr><td colspan="6" class="empty-state">No hay evidencias pendientes de revisión.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="panel-note">Selecciona una evidencia para ver su fotografía, aprobarla o rechazarla.</p>
+</section>
 {% endblock %}

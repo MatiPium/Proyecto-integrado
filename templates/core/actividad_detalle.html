@@ -1,35 +1,25 @@
 {% extends "base.html" %}
-{% block titulo %}Actividad{% endblock %}
+{% block titulo %}Adjuntar evidencia{% endblock %}
 {% block contenido %}
-<h1 class="h3">Actividad del {{ actividad.fecha|date:"d/m/Y" }}</h1>
-<p class="text-muted">{{ actividad.funcionario }} · {{ actividad.item.nombre }}</p>
-<div class="row g-3">
-  <div class="col-lg-7"><div class="card"><div class="card-body">
-    <dl class="row mb-0">
-      <dt class="col-sm-4">Tipo de atención</dt><dd class="col-sm-8">{{ actividad.tipo_atencion|default:"—" }}</dd>
-      <dt class="col-sm-4">Solicitud</dt><dd class="col-sm-8">{{ actividad.solicitud }}</dd>
-      <dt class="col-sm-4">Acción ejecutada</dt><dd class="col-sm-8">{{ actividad.accion }}</dd>
-      <dt class="col-sm-4">Contacto</dt><dd class="col-sm-8">{{ actividad.contacto_nombre|default:"—" }} {{ actividad.contacto_telefono }}</dd>
-      <dt class="col-sm-4">Agenda colectiva</dt><dd class="col-sm-8">{{ actividad.ingresa_agenda|yesno:"Sí,No" }}</dd>
-    </dl>
-  </div></div></div>
-  <div class="col-lg-5"><div class="card"><div class="card-body">
-    <h2 class="h6">Evidencias</h2>
-    <ul class="list-group list-group-flush mb-3">
-      {% for e in actividad.evidencias.all %}
-        <li class="list-group-item d-flex justify-content-between">
-          <span><strong>{{ e.codigo }}</strong> · {{ e.get_momento_display }}</span>
-          <span class="badge {% if e.estado == 'APR' %}badge-verde{% elif e.estado == 'REC' %}badge-rojo{% else %}badge-ambar{% endif %}">{{ e.get_estado_display }}</span>
-        </li>
-      {% empty %}<li class="list-group-item text-muted">Sin evidencias cargadas.</li>{% endfor %}
-    </ul>
-    <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}
-      {% for campo in form_evidencia %}
-        <div class="mb-2"><label class="form-label">{{ campo.label }}</label>{{ campo }}
-          {% for error in campo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-      {% endfor %}
-      <button class="btn btn-sm btn-primary" style="background:#1E2761;border:0">Cargar evidencia</button>
-    </form>
-  </div></div></div>
-</div>
+<section class="panel mb-4">
+  <div class="panel-header"><h2>Actividad del {{ actividad.fecha|date:'d/m/Y' }}</h2><a href="{% url 'actividad_list' %}" class="btn btn-outline-secondary btn-sm">Volver a actividades</a></div>
+  <div class="form-grid"><dl class="detail-field"><dt>Funcionario</dt><dd>{{ actividad.funcionario }}</dd></dl><dl class="detail-field"><dt>Ítem de gestión</dt><dd>{{ actividad.item.nombre }}</dd></dl></div>
+  <details class="mb-4"><summary>Ver información de la actividad</summary><dl class="mt-3"><dt>Solicitud</dt><dd>{{ actividad.solicitud }}</dd><dt>Acción realizada</dt><dd>{{ actividad.accion }}</dd><dt>Tipo de atención</dt><dd>{{ actividad.tipo_atencion|default:'—' }}</dd><dt>Contacto</dt><dd>{{ actividad.contacto_nombre|default:'—' }} {{ actividad.contacto_telefono }}</dd><dt>Agenda colectiva</dt><dd>{{ actividad.ingresa_agenda|yesno:'Sí,No' }}</dd></dl></details>
+  {% if form_evidencia.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form_evidencia.non_field_errors }}</div>{% endif %}
+  <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}
+    <div class="upload-zone" data-upload-zone>
+      <img class="upload-preview" data-upload-preview hidden alt="Vista previa de la fotografía seleccionada">
+      <h3>Vista previa de fotografía</h3><p>Arrastra una imagen o selecciona un archivo</p>
+      <label class="btn btn-primary upload-trigger" for="{{ form_evidencia.archivo.id_for_label }}">Seleccionar archivo{{ form_evidencia.archivo }}</label>
+      <span class="upload-filename" data-upload-name aria-live="polite">Ningún archivo seleccionado</span>
+    </div>
+    {% if form_evidencia.archivo.errors %}<div class="field-errors">{{ form_evidencia.archivo.errors }}</div>{% endif %}
+    <div class="form-grid">{% include 'core/_campo.html' with campo=form_evidencia.momento %}</div>
+    <p class="panel-note">Formato recomendado: JPG o PNG. Máximo 10 MB. Cada evidencia se asocia a un código único.</p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Guardar evidencia</button></div>
+  </form>
+</section>
+<section class="panel"><div class="panel-header"><h2>Evidencias registradas</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Código</th><th>Momento</th><th>Fotografía</th><th>Estado</th></tr></thead><tbody>
+  {% for e in actividad.evidencias.all %}<tr><td class="fw-semibold">{{ e.codigo }}</td><td>{{ e.get_momento_display }}</td><td>{% if e.archivo %}<a href="{{ e.archivo.url }}" target="_blank" rel="noopener">Ver fotografía</a>{% else %}—{% endif %}</td><td><span class="badge {% if e.estado == 'APR' %}badge-verde{% elif e.estado == 'REC' %}badge-rojo{% else %}badge-ambar{% endif %}">{{ e.get_estado_display }}</span></td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Sin evidencias cargadas.</td></tr>{% endfor %}
+</tbody></table></div></section>
 {% endblock %}

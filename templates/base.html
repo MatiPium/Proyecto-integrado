@@ -1,58 +1,51 @@
+{% load static %}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183650">
   <title>{% block titulo %}SGR{% endblock %} · SGR La Serena</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    :root { --ink:#1E2761; --ice:#CADCFC; }
-    body { background:#F3F5FA; }
-    .navbar { background: var(--ink); }
-    .navbar .nav-link, .navbar-brand { color:#fff !important; }
-    .navbar .nav-link.active { background:#fff; color:var(--ink) !important; border-radius:6px; }
-    .card { border-color:#DCE1EC; }
-    .badge-verde { background:#2F8F5B; } .badge-ambar { background:#C98A00; } .badge-rojo { background:#C43D32; }
-    .table > :not(caption) > * > * { padding:.6rem .75rem; }
-  </style>
+  <link href="{% static 'core/css/sgr.css' %}" rel="stylesheet">
 </head>
-<body>
+<body class="{% if user.is_authenticated %}app-layout{% else %}auth-layout{% endif %}">
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
 {% if user.is_authenticated %}
-<nav class="navbar navbar-expand-lg mb-4">
-  <div class="container">
-    <a class="navbar-brand fw-bold" href="{% url 'inicio' %}">SGR</a>
-    <div class="navbar-nav me-auto">
-      <a class="nav-link" href="{% url 'actividad_list' %}">Actividades</a>
-      <a class="nav-link" href="{% url 'verificacion_list' %}">Verificación</a>
-      <a class="nav-link" href="{% url 'compromiso_list' %}">Agenda colectiva</a>
-      <a class="nav-link" href="{% url 'reclamo_list' %}">Reclamos</a>
-      <a class="nav-link" href="{% url 'indicadores' %}">Indicadores</a>
-      <a class="nav-link" href="{% url 'delegaciones_list' %}">Delegaciones</a>
-      <a class="nav-link" href="{% url 'roles_list' %}">Roles</a>
-      <a class="nav-link" href="{% url 'funcionario_list' %}">Usuarios</a>
-      <a class="nav-link" href="{% url 'items_list' %}">Ítems</a>
-      <a class="nav-link" href="{% url 'tipos_list' %}">Tipos</a>
-      <a class="nav-link" href="{% url 'subatenciones_list' %}">Subatenciones</a>
-      <a class="nav-link" href="{% url 'atencion_list' %}">Atenciones</a>
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{% url 'inicio' %}" aria-label="SGR — Inicio"><strong>SGR</strong><span>La Serena | Municipio</span></a>
+    <nav class="sidebar-nav" aria-label="Navegación principal">
+      {% for item in ui_navigation %}<a href="{% url item.route %}" class="sidebar-link{% if item.active %} active{% endif %}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
+    </nav>
+    <div class="sidebar-footer">
+      <span class="sidebar-role">{{ user.rol|default:"Funcionario municipal" }}</span>
+      <strong>{{ user.get_full_name|default:user.username }}</strong>
+      <span>{{ user.delegacion|default:"Sin delegación asignada" }}</span>
+      {% if user.delegaciones_autorizadas.exists %}
+      <form method="post" action="{% url 'cambiar_delegacion' %}" class="delegation-switch" data-confirm="¿Cambiar de delegación? Se perderán los cambios sin guardar.">
+        {% csrf_token %}<label for="cambiar-delegacion">Delegación activa</label>
+        <div class="d-flex gap-2"><select id="cambiar-delegacion" name="delegacion" class="form-select form-select-sm" required><option value="">Seleccionar</option>{% for d in user.delegaciones_autorizadas.all %}<option value="{{ d.pk }}"{% if request.session.delegacion_activa_id == d.pk %} selected{% endif %}>{{ d.nombre }}</option>{% endfor %}</select><button class="btn btn-sm btn-outline-light" type="submit">Ir</button></div>
+      </form>
+      {% endif %}
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="logout-button" type="submit">Cerrar sesión <span aria-hidden="true">↗</span></button></form>
     </div>
-    <span class="text-white-50 small me-3">{{ user }} · {{ user.rol|default:"sin rol" }} · {{ user.delegacion|default:"Sin delegación" }}</span>
-    {% if user.delegaciones_autorizadas.exists %}<form method="post" action="{% url 'cambiar_delegacion' %}" class="d-flex align-items-center me-2" onsubmit="return confirm('¿Cambiar de delegación? Los datos del formulario sin guardar se perderán.')">{% csrf_token %}<label class="visually-hidden" for="cambiar-delegacion">Delegación activa</label><select class="form-select form-select-sm" id="cambiar-delegacion" name="delegacion" onchange="this.form.submit()"><option value="">Cambiar delegación</option>{% for d in user.delegaciones_autorizadas.all %}<option value="{{ d.pk }}">{{ d.codigo }} {{ d.nombre }}</option>{% endfor %}</select></form>{% endif %}
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-      <button class="btn btn-sm btn-outline-light">Cerrar sesión</button>
-    </form>
-  </div>
-</nav>
+  </aside>
+  <button class="sidebar-overlay" type="button" aria-label="Cerrar menú" hidden></button>
+  <header class="mobile-header"><a href="{% url 'inicio' %}">SGR <span>La Serena</span></a><button class="menu-toggle" type="button" aria-controls="sidebar" aria-expanded="false">Menú <span aria-hidden="true">☰</span></button></header>
+{% else %}
+  <aside class="auth-brand"><div><a href="{% url 'login' %}">SGR</a><h2>Sistema de Gestión de Resultados</h2><p>Delegaciones Municipales de La Serena</p></div></aside>
 {% endif %}
-
-<div class="container pb-5">
-  {% if messages %}{% for m in messages %}
-    <div class="alert alert-{{ m.tags|default:'info' }} alert-dismissible fade show">{{ m }}
-      <button class="btn-close" data-bs-dismiss="alert"></button></div>
-  {% endfor %}{% endif %}
-  {% block contenido %}{% endblock %}
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-{% if messages %}<script>{% for m in messages %}if(window.Swal){Swal.fire({text:'{{ m|escapejs }}',icon:'{% if m.tags == "error" %}error{% elif m.tags == "success" %}success{% else %}info{% endif %}',timer:3500,showConfirmButton:false});}{% endfor %}</script>{% endif %}
+<main id="contenido" class="{% if user.is_authenticated %}app-main{% else %}auth-main{% endif %}" tabindex="-1">
+  {% if user.is_authenticated %}
+    <header class="page-heading"><h1>{{ ui_title }}</h1><p>{{ ui_subtitle }}</p></header>
+    {% if ui_subnavigation %}<nav class="section-nav" aria-label="Secciones del módulo">{% for item in ui_subnavigation %}<a href="{% url item.route %}"{% if item.active %} class="active" aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</nav>{% endif %}
+  {% endif %}
+  <div class="page-content">
+    {% for message in messages %}<div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}" role="status">{{ message }}</div>{% endfor %}
+    {% block contenido %}{% endblock %}
+  </div>
+</main>
+<script src="{% static 'core/js/sgr.js' %}" defer></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

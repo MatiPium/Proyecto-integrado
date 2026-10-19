@@ -1,29 +1,14 @@
 {% extends "base.html" %}
-{% block titulo %}Funcionarios{% endblock %}
+{% block titulo %}Gestión de funcionarios{% endblock %}
 {% block contenido %}
-<a class="btn btn-outline-success mb-3" href="{% url 'usuarios_excel' %}?q={{ request.GET.q|urlencode }}">Exportar Excel</a>
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h3 mb-0">Funcionarios</h1>
-  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'funcionario_create' %}">Nuevo</a>
-</div>
-<form class="row g-2 mb-3"><div class="col-auto">
-  <input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar..."></div>
-  <div class="col-auto"><button class="btn btn-outline-secondary">Buscar</button></div></form>
-<div class="card"><table class="table mb-0">
-  <thead><tr><th>Funcionario</th><th>Usuario</th><th>Delegación</th><th>Cargo</th><th>Rol</th><th></th></tr></thead>
-  <tbody>
-  {% for o in funcionarios %}
-    <tr><td class="fw-bold">{{ o.get_full_name|default:"—" }}</td><td>{{ o.username }}</td>
-      <td>{{ o.delegacion|default:"—" }}</td><td>{{ o.cargo|default:"—" }}</td><td>{{ o.rol|default:"—" }}</td>
-      <td class="text-end">
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'funcionario_update' o.pk %}">Editar</a>
-        <a class="btn btn-sm btn-outline-danger" href="{% url 'funcionario_delete' o.pk %}">Eliminar</a>
-      </td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="6" class="text-muted">No hay registros todavía.</td></tr>
-  {% endfor %}
-  </tbody>
-</table></div>
-{% include "core/_paginacion.html" %}
+<section class="panel">
+  <div class="panel-header"><h2>Usuarios del sistema</h2><div class="toolbar-actions"><a class="btn btn-outline-success" href="{% url 'usuarios_excel' %}?q={{ request.GET.q|default:''|urlencode }}">Exportar Excel</a><a class="btn btn-primary" href="{% url 'funcionario_create' %}">+ Nuevo usuario</a></div></div>
+  <form class="search-form" method="get"><div class="search-field"><label class="form-label" for="buscar-funcionario">Buscar funcionario</label><input class="form-control" id="buscar-funcionario" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Nombre o usuario"></div><button class="btn btn-primary" type="submit">Buscar</button></form>
+  <div class="table-responsive"><table class="table"><thead><tr><th>Funcionario</th><th>Usuario</th><th>Delegación</th><th>Cargo</th><th>Rol</th><th class="text-end">Acciones</th></tr></thead><tbody>
+    {% for o in funcionarios %}<tr><td class="fw-semibold">{{ o.get_full_name|default:o.username }}</td><td>{{ o.username }}</td><td>{{ o.delegacion|default:'—' }}</td><td>{{ o.cargo|default:'—' }}</td><td>{{ o.rol|default:'—' }}</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'funcionario_update' o.pk %}">Editar</a> <a class="btn btn-sm btn-outline-danger" href="{% url 'funcionario_delete' o.pk %}">Eliminar</a></td></tr>
+    {% empty %}<tr><td colspan="6" class="empty-state">No hay funcionarios que coincidan con la búsqueda.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="panel-note">Consulta, edita y administra las cuentas, delegaciones y roles del sistema.</p>
+  {% include 'core/_paginacion.html' %}
+</section>
 {% endblock %}

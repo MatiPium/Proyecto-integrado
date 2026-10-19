@@ -1,0 +1,12 @@
+{% if campo.is_hidden %}{{ campo }}{% else %}
+<div class="{% if campo.name == 'solicitud' or campo.name == 'accion' or campo.name == 'descripcion' or campo.name == 'observacion' or campo.name == 'delegaciones_autorizadas' %}field-full{% endif %}">
+  {% if campo.field.widget.input_type == 'checkbox' %}
+  <div class="field-checkbox">{{ campo }}<label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label></div>
+  {% else %}
+  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %}<span aria-hidden="true"> *</span>{% endif %}</label>
+  {{ campo }}
+  {% endif %}
+  {% if campo.help_text %}<div class="form-text" id="{{ campo.auto_id }}_helptext">{{ campo.help_text|safe }}</div>{% endif %}
+  {% if campo.errors %}<div class="field-errors" id="{{ campo.auto_id }}_error">{% for error in campo.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+</div>
+{% endif %}

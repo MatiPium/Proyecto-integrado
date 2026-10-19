@@ -1,4 +1,33 @@
-{% extends 'base.html' %}{% block titulo %}Ingreso de atención{% endblock %}{% block contenido %}
-<h1 class="h3 mb-4">Ingreso de atención ciudadana</h1><div class="card"><div class="card-body p-4"><form method="post" id="atencion-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}{% for campo in form %}<div class="mb-3"><label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} *{% endif %}</label>{{ campo }}{% for error in campo.errors %}<p class="text-danger small">{{ error }}</p>{% endfor %}</div>{% endfor %}<p class="text-muted small">La delegación y el usuario responsable se registran desde la sesión.</p><button class="btn btn-primary" id="save">Guardar atención</button><a href="{% url 'atencion_list' %}" class="btn btn-outline-secondary">Cancelar</a></form></div></div>
-<script>const t=document.getElementById('id_tipo'), s=document.getElementById('id_subatencion'); async function carga(){const old=s.value;s.innerHTML='<option value="">Seleccione subatención</option>';if(!t.value)return;try{const response=await fetch('{% url "subatenciones_json" %}?tipo='+encodeURIComponent(t.value));if(!response.ok)throw Error('Error de servidor');const data=await response.json();data.opciones.forEach(o=>{const opt=document.createElement('option');opt.value=o.id;opt.textContent=o.nombre;s.append(opt)});if([...s.options].some(o=>o.value===old))s.value=old;}catch(e){alert('No fue posible cargar subatenciones.')}}t.addEventListener('change',()=>{s.value='';carga()});if(t.value)carga();document.getElementById('atencion-form').addEventListener('submit',()=>{document.getElementById('save').disabled=true;});</script>
+{% extends 'base.html' %}
+{% block titulo %}Ingreso de atención{% endblock %}
+{% block contenido %}
+<section class="panel form-panel"><h2>Nueva atención ciudadana</h2>
+<form method="post" id="atencion-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+<div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
+<p class="form-note small">La delegación y el usuario responsable se registran desde la sesión.</p><div class="form-actions"><a href="{% url 'atencion_list' %}" class="btn btn-secondary">Cancelar</a><button class="btn btn-primary" id="save" type="submit">Guardar atención</button></div></form></section>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const tipo = document.getElementById('id_tipo');
+  const subatencion = document.getElementById('id_subatencion');
+  let controller;
+  async function cargar() {
+    controller?.abort(); controller = new AbortController();
+    const anterior = subatencion.value;
+    subatencion.replaceChildren(new Option('Seleccione subatención', ''));
+    if (!tipo.value) return;
+    try {
+      const response = await fetch('{% url "subatenciones_json" %}?tipo=' + encodeURIComponent(tipo.value), {signal: controller.signal});
+      if (!response.ok) throw new Error('Error de servidor');
+      const data = await response.json();
+      data.opciones.forEach(opcion => subatencion.add(new Option(opcion.nombre, opcion.id)));
+      if ([...subatencion.options].some(opcion => opcion.value === anterior)) subatencion.value = anterior;
+    } catch (error) { if (error.name !== 'AbortError') alert('No fue posible cargar subatenciones.'); }
+  }
+  tipo.addEventListener('change', () => { subatencion.value = ''; cargar(); });
+  if (tipo.value) cargar();
+  document.getElementById('atencion-form').addEventListener('submit', () => { document.getElementById('save').disabled = true; });
+})();
+</script>
 {% endblock %}

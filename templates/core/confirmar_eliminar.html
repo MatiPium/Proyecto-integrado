@@ -1,14 +1,5 @@
-{% extends "base.html" %}
-{% block titulo %}Eliminar{% endblock %}
+{% extends 'base.html' %}
+{% block titulo %}Confirmar eliminación{% endblock %}
 {% block contenido %}
-<div class="row justify-content-center"><div class="col-lg-6">
-  <div class="card border-danger"><div class="card-body p-4">
-    <h1 class="h5">¿Eliminar este registro?</h1>
-    <p class="mb-4">Se eliminará <strong>{{ object }}</strong>. Esta acción no se puede deshacer.</p>
-    <form method="post">{% csrf_token %}
-      <button class="btn btn-danger">Sí, eliminar</button>
-      <a class="btn btn-outline-secondary" href="javascript:history.back()">Cancelar</a>
-    </form>
-  </div></div>
-</div></div>
+<section class="card deletion-card"><div class="card-body"><h2>¿Eliminar este registro?</h2><p>Se eliminará <strong>{{ object }}</strong>. Esta acción no se puede deshacer.</p><form method="post">{% csrf_token %}<div class="form-actions"><a class="btn btn-secondary" href="{% url ui_back_route %}">Cancelar</a><button class="btn btn-danger" type="submit">Sí, eliminar</button></div></form></div></section>
 {% endblock %}

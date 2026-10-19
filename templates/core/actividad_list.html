@@ -1,25 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}Actividades{% endblock %}
 {% block contenido %}
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h3 mb-0">Actividades</h1>
-  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'actividad_create' %}">Registrar actividad</a>
-</div>
-<div class="card"><table class="table mb-0">
-  <thead><tr><th>Fecha</th><th>Funcionario</th><th>Ítem</th><th>Solicitud</th><th>Evidencia</th><th></th></tr></thead>
-  <tbody>
-  {% for a in actividades %}
-    <tr>
-      <td>{{ a.fecha|date:"d/m/Y" }}</td><td>{{ a.funcionario }}</td><td>{{ a.item.nombre }}</td>
-      <td>{{ a.solicitud|truncatechars:60 }}</td><td>{{ a.estado_evidencia }}</td>
-      <td class="text-end">
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'actividad_detalle' a.pk %}">Ver</a>
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'actividad_update' a.pk %}">Editar</a>
-        <a class="btn btn-sm btn-outline-danger" href="{% url 'actividad_delete' a.pk %}">Eliminar</a>
-      </td>
-    </tr>
-  {% empty %}<tr><td colspan="6" class="text-muted">No hay actividades registradas.</td></tr>{% endfor %}
-  </tbody>
-</table></div>
-{% include "core/_paginacion.html" %}
+<section class="panel"><div class="panel-header"><h2>Actividades registradas</h2><a class="btn btn-primary" href="{% url 'actividad_create' %}">+ Registrar actividad</a></div>
+<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Funcionario</th><th>Ítem</th><th>Solicitud</th><th>Evidencia</th><th class="text-end">Acciones</th></tr></thead><tbody>
+{% for a in actividades %}<tr><td>{{ a.fecha|date:'d/m/Y' }}</td><td>{{ a.funcionario }}</td><td>{{ a.item.nombre }}</td><td>{{ a.solicitud|truncatechars:60 }}</td><td>{{ a.estado_evidencia }}</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'actividad_detalle' a.pk %}">Ver / adjuntar</a> <a class="btn btn-sm btn-outline-secondary" href="{% url 'actividad_update' a.pk %}">Editar</a> <a class="btn btn-sm btn-outline-danger" href="{% url 'actividad_delete' a.pk %}">Eliminar</a></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">No hay actividades registradas.</td></tr>{% endfor %}
+</tbody></table></div>{% include 'core/_paginacion.html' %}</section>
 {% endblock %}

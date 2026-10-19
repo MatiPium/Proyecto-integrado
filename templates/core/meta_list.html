@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Metas del período{% endblock %}
 {% block contenido %}
-<div class="d-flex align-items-center mb-3">
-  <h1 class="h3 mb-0">Metas del período</h1>
-  <a class="btn btn-primary ms-auto" style="background:#1E2761;border:0" href="{% url 'meta_create' %}">Nuevo</a>
+<section class="panel">
+<div class="panel-header">
+  <h2 class="h4 mb-0">Metas del período</h2>
+  <a class="btn btn-primary ms-auto" href="{% url 'meta_create' %}">+ Nuevo registro</a>
 </div>
 
-<div class="card"><table class="table mb-0">
+<div class="table-responsive"><table class="table mb-0">
   <thead><tr><th>Funcionario</th><th>Ítem</th><th>Período</th><th>Meta</th><th>Avance</th><th>Cumplimiento</th><th></th></tr></thead>
   <tbody>
   {% for o in metas %}
@@ -19,9 +20,10 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="7" class="text-muted">No hay registros todavía.</td></tr>
+    <tr><td colspan="7" class="empty-state">No hay registros todavía.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>
 {% include "core/_paginacion.html" %}
+</section>
 {% endblock %}

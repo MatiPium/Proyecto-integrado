@@ -1,20 +1,13 @@
 {% extends "base.html" %}
-{% block titulo %}Indicadores{% endblock %}
+{% block titulo %}Tablero de cumplimiento{% endblock %}
 {% block contenido %}
-<h1 class="h3">Indicadores globales</h1>
-<p class="text-muted">{% if periodo %}{{ periodo }} · avance esperado al día de hoy: {{ esperado }}%{% else %}No hay un período abierto.{% endif %}</p>
-<div class="card"><table class="table mb-0">
-  <thead><tr><th>Delegación</th><th class="text-end">Funcionarios</th><th class="text-end">Cumplimiento</th>
-    <th>Semáforo</th><th class="text-end">Compromisos</th><th class="text-end">Realizados</th>
-    <th class="text-end">Reclamos</th><th class="text-end">Felicitaciones</th></tr></thead>
-  <tbody>
-  {% for f in filas %}
-    <tr><td class="fw-bold">{{ f.delegacion }}</td><td class="text-end">{{ f.funcionarios }}</td>
-      <td class="text-end fw-bold">{{ f.cumplimiento }}%</td>
-      <td><span class="badge badge-{{ f.semaforo }}">{{ f.semaforo }}</span></td>
-      <td class="text-end">{{ f.compromisos }}</td><td class="text-end">{{ f.realizados }}</td>
-      <td class="text-end">{{ f.reclamos }}</td><td class="text-end">{{ f.felicitaciones }}</td></tr>
-  {% empty %}<tr><td colspan="8" class="text-muted">No hay delegaciones activas.</td></tr>{% endfor %}
-  </tbody>
-</table></div>
+<div class="summary-grid">
+<div class="card stat-card"><div class="stat-label">Delegaciones activas</div><div class="stat-number">{{ filas|length }}</div></div>
+<div class="card stat-card"><div class="stat-label">Avance esperado</div><div class="stat-number">{{ esperado }} %</div></div>
+<div class="card stat-card"><div class="stat-label">Período de gestión</div><div class="stat-period">{{ periodo|default:'Sin período abierto' }}</div></div>
+</div>
+<section class="panel"><div class="panel-header"><h2>Cumplimiento por delegación</h2><a href="{% url 'meta_list' %}" class="btn btn-outline-secondary">Consultar metas</a></div>
+<div class="table-responsive"><table class="table"><thead><tr><th>Delegación</th><th>Funcionarios</th><th>Cumplimiento</th><th>Semáforo</th><th>Compromisos</th><th>Realizados</th><th>Reclamos</th><th>Felicitaciones</th></tr></thead><tbody>
+{% for f in filas %}<tr><td class="fw-semibold">{{ f.delegacion }}</td><td>{{ f.funcionarios }}</td><td class="fw-semibold">{{ f.cumplimiento }} %</td><td><span class="badge badge-{{ f.semaforo }}">{{ f.semaforo|capfirst }}</span></td><td>{{ f.compromisos }}</td><td>{{ f.realizados }}</td><td>{{ f.reclamos }}</td><td>{{ f.felicitaciones }}</td></tr>{% empty %}<tr><td colspan="8" class="empty-state">No hay delegaciones activas.</td></tr>{% endfor %}
+</tbody></table></div><p class="panel-note">Los colores se determinan por el avance esperado del período y los resultados registrados.</p></section>
 {% endblock %}
