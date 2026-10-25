@@ -9,6 +9,9 @@ def interfaz(request):
         ('actividades', 'Actividades', 'actividad_list', ('actividad', 'atencion')),
         ('evidencias', 'Evidencias', 'verificacion_list', ('verificacion',)),
         ('agenda', 'Agenda colectiva', 'compromiso_list', ('compromiso',)),
+        ('comunidad', 'Vecinos y organizaciones', 'vecino_list', ('vecino', 'organizacion', 'membresia')),
+        ('hitos', 'Hitos y festividades', 'hito_list', ('hito',)),
+        ('ausencias', 'Ausencias', 'ausencia_list', ('ausencia',)),
         ('metas', 'Metas e indicadores', 'indicadores', ('indicadores', 'meta', 'periodo')),
         ('reclamos', 'Reclamos / felicitaciones', 'reclamo_list', ('reclamo',)),
         ('auditoria', 'Auditoría', 'auditoria', ('auditoria',)),
@@ -19,6 +22,11 @@ def interfaz(request):
     if route == 'actividad_detalle':
         active = 'evidencias'
     pages = {
+        'vecino': ('Vecinos', 'Registro territorial y pertenencia a organizaciones'),
+        'organizacion': ('Organizaciones comunitarias', 'Juntas de vecinos y organizaciones por delegación'),
+        'membresia': ('Pertenencias y dirigentes', 'Roles de vecinos en sus organizaciones'),
+        'hito': ('Hitos y festividades', 'Planificación, responsables y tareas internas'),
+        'ausencia': ('Ausencias justificadas', 'Ajuste proporcional de metas por días laborables'),
         'inicio': ('Mi tablero', 'Gestión y seguimiento de resultados municipales'),
         'actividad': ('Actividades', 'Registro diario de actividades por funcionario'),
         'atencion': ('Atenciones ciudadanas', 'Registro y seguimiento de la atención a vecinos'),
@@ -48,6 +56,7 @@ def interfaz(request):
         'funcionario_create': 'Nuevo funcionario', 'funcionario_update': 'Editar funcionario',
     }
     submenus = {
+        'comunidad': [('Vecinos', 'vecino_list'), ('Organizaciones', 'organizacion_list'), ('Pertenencias', 'membresia_list')],
         'administracion': [('Funcionarios', 'funcionario_list'), ('Delegaciones', 'delegaciones_list'),
                            ('Roles', 'roles_list'), ('Cargos', 'cargo_list'), ('Ítems', 'items_list'),
                            ('Tipos de atención', 'tipos_list'), ('Subatenciones', 'subatenciones_list')],

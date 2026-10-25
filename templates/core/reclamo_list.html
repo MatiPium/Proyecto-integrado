@@ -15,6 +15,11 @@
       <td>{{ o.delegacion }}</td><td>{{ o.funcionario|default:"—" }}</td><td>{{ o.fecha|date:"d/m/Y" }}</td>
       <td>{{ o.get_estado_display }}</td>
       <td class="text-end">
+        {% if o.tipo == 'FEL' %}
+          {% if o.validada_por_id %}<span class="badge badge-verde">Validada por {{ o.validada_por }}</span>{% else %}<span class="badge badge-ambar">Sin validación formal</span>{% endif %}
+          {% if o.respaldo %}<a href="{{ o.respaldo.url }}" target="_blank" rel="noopener">Ver respaldo</a>{% endif %}
+          {% if user.rol.codigo == 'DELEG' and user.delegacion_id == o.delegacion_id %}<form class="d-inline" method="post" action="{% url 'felicitacion_validar' o.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Validar felicitación</button></form>{% endif %}
+        {% endif %}
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'reclamo_update' o.pk %}">Editar</a>
         <a class="btn btn-sm btn-outline-danger" href="{% url 'reclamo_delete' o.pk %}">Eliminar</a>
       </td>

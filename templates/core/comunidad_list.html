@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel">
+  <div class="panel-header"><h2>{{ nombre }}</h2>{% if puede_gestionar %}<a class="btn btn-primary" href="{% url clave|add:'_create' %}">Nuevo registro</a>{% endif %}</div>
+  <form method="get" class="d-flex gap-2 p-3"><label for="buscar-comunidad" class="visually-hidden">Buscar</label><input id="buscar-comunidad" class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar por nombre o usuario"><button class="btn btn-secondary">Buscar</button></form>
+  <div class="table-responsive"><table class="table"><thead><tr><th>Registro</th><th>Delegación / territorio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+  {% for o in object_list %}<tr><td>{{ o }}</td><td>{% if clave == 'ausencia' %}{{ o.funcionario.delegacion }}{% elif clave == 'membresia' %}{{ o.vecino.delegacion }}{% else %}{{ o.delegacion }} {{ o.territorio }}{% endif %}</td><td>{% if clave == 'hito' %}{{ o.get_estado_display }}{% elif clave == 'vecino' %}{{ o.activo|yesno:'Activo,Inactivo' }}{% else %}{{ o.activa|yesno:'Activo,Inactivo' }}{% endif %}</td>
+  <td><a class="btn btn-sm btn-outline-primary" href="{% url clave|add:'_detalle' o.pk %}">Consultar</a>{% if puede_gestionar %} <a class="btn btn-sm btn-outline-secondary" href="{% url clave|add:'_update' o.pk %}">Editar</a>{% if permite_desactivar %}<form method="post" action="{% url clave|add:'_disable' o.pk %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Desactivar</button></form>{% endif %}{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="4" class="empty-state">No hay registros.</td></tr>{% endfor %}
+  </tbody></table></div>{% include 'core/_paginacion.html' %}
+</section>
+{% endblock %}

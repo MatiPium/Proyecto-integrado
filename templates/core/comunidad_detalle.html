@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel p-4">
+  <div class="panel-header"><h2>{{ object }}</h2><a href="{% url clave|add:'_list' %}" class="btn btn-secondary">Volver</a>{% if puede_gestionar %}<a href="{% url clave|add:'_update' object.pk %}" class="btn btn-primary">Editar</a>{% endif %}</div>
+  <dl class="form-grid">{% for etiqueta, valor in campos %}<div><dt>{{ etiqueta|capfirst }}</dt><dd>{{ valor|default_if_none:'—' }}</dd></div>{% endfor %}</dl>
+  {% if clave == 'vecino' %}<p>Pertenece a una junta de vecinos activa: {{ object.pertenece_junta|yesno:'Sí,No' }}</p>{% endif %}
+  {% if clave == 'vecino' or clave == 'organizacion' %}
+  <h3>Pertenencias y roles</h3><ul>{% for m in membresias %}<li>{{ m }} · {{ m.cargo }} · {{ m.activa|yesno:'Activa,Inactiva' }}</li>{% empty %}<li>Sin pertenencias registradas.</li>{% endfor %}</ul>
+  {% if puede_gestionar %}<a class="btn btn-outline-primary" href="{% url 'membresia_create' %}">Registrar pertenencia</a>{% endif %}
+  {% endif %}
+  {% if clave == 'hito' %}
+  <h3>Funcionarios responsables</h3><ul>{% for f in object.responsables.all %}<li>{{ f }}</li>{% endfor %}</ul>
+  <h3>Actividades internas de planificación y ejecución</h3>
+  <p>Las tareas se siguen en la agenda colectiva. El puntaje se evalúa al registrar la ejecución final.</p>
+  <a class="btn btn-primary" href="{% url 'compromiso_create' %}?hito={{ object.pk }}">Agregar tarea al tubo</a>
+  <ul class="mt-3">{% for tarea in object.tareas.all %}<li><a href="{% url 'compromiso_detalle' tarea.pk %}">{{ tarea }}</a> · {{ tarea.responsable }} · {{ tarea.get_estado_display }}{% if tarea.responsable_id == user.pk %} · <a href="{% url 'actividad_create' %}?tarea={{ tarea.pk }}">Registrar ejecución</a>{% endif %}</li>{% empty %}<li>Sin tareas.</li>{% endfor %}</ul>
+  <h3>Ejecuciones registradas</h3><ul>{% for a in object.actividades.all %}<li><a href="{% url 'actividad_detalle' a.pk %}">{{ a }}</a> · {{ a.get_origen_display }}</li>{% empty %}<li>Sin ejecuciones.</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% endblock %}

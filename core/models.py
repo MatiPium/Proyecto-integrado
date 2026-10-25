@@ -10,7 +10,8 @@ los formularios del sitio como en el panel de administración de Django.
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models
+from django.db import models, transaction
+from datetime import timedelta
 from django.utils import timezone
 
 
@@ -104,6 +105,9 @@ class Item(models.Model):
         validators=[MinValueValidator(0.01), MaxValueValidator(100)],
     )
     vigente = models.BooleanField("vigente", default=True)
+    puntuable = models.BooleanField("acción válida para puntuación", default=True)
+    tipo_resultado = models.CharField('resultado admitido', max_length=3, default='EJE',
+        choices=[('EJE', 'Ejecución final'), ('FEL', 'Felicitación validada')])
     codigo = models.CharField(max_length=20, blank=True, default="")
     descripcion = models.CharField(max_length=250, blank=True, default="")
 
@@ -189,6 +193,7 @@ class Funcionario(AbstractUser):
     rol = models.ForeignKey(Rol, on_delete=models.PROTECT, null=True, blank=True,
                             related_name="funcionarios", verbose_name="rol")
     telefono = models.CharField("teléfono", max_length=20, blank=True)
+    territorio = models.CharField('territorio de trabajo', max_length=100, blank=True)
     delegaciones_autorizadas = models.ManyToManyField(Delegacion, blank=True, related_name="usuarios_autorizados")
 
     class Meta:
@@ -251,27 +256,53 @@ class MetaFuncionario(models.Model):
 
     @property
     def avance(self):
-        """Cuenta las actividades del período que tienen evidencia aprobada."""
-        return Actividad.objects.filter(
+        """Una ejecución válida cuenta una vez, aunque tenga varias evidencias."""
+        actividades = Actividad.objects.filter(
             funcionario=self.funcionario, item=self.item,
             fecha__range=(self.periodo.fecha_inicio, self.periodo.fecha_termino),
-            evidencias__estado=Evidencia.APROBADA,
-        ).distinct().count()
+        ).select_related('item', 'beneficiario_funcionario', 'felicitacion').prefetch_related('evidencias')
+        return sum(a.genera_puntaje for a in actividades)
+
+    def dias_laborables(self, hasta=None):
+        from .calendario import dias_habiles
+        fin = min(hasta or self.periodo.fecha_termino, self.periodo.fecha_termino)
+        inicio = self.periodo.fecha_inicio
+        dias = dias_habiles(inicio, fin)
+        ausencias = self.funcionario.ausencias.filter(
+            activa=True, fecha_inicio__lte=fin, fecha_termino__gte=inicio)
+        for ausencia in ausencias:
+            desde, hasta_ausencia = max(inicio, ausencia.fecha_inicio), min(fin, ausencia.fecha_termino)
+            dias.difference_update(desde + timedelta(days=n) for n in range((hasta_ausencia - desde).days + 1))
+        return len(dias)
+
+    @property
+    def meta_ajustada(self):
+        from .calendario import dias_habiles
+        inicio, fin = self.periodo.fecha_inicio, self.periodo.fecha_termino
+        base = len(dias_habiles(inicio, fin))
+        return self.valor_objetivo * self.dias_laborables() / base if base else 0
+
+    @property
+    def avance_esperado(self):
+        total = self.dias_laborables()
+        return self.dias_laborables(timezone.localdate()) / total * 100 if total else 0
 
     @property
     def cumplimiento(self):
-        if not self.valor_objetivo:
+        if not self.meta_ajustada:
             return 0
-        return round(self.avance / self.valor_objetivo * 100, 1)
+        return round(min(self.avance / self.meta_ajustada * 100, 120), 1)
 
     @property
     def resultado_ponderado(self):
-        return round(float(self.item.ponderador) * min(self.cumplimiento, 150) / 100, 1)
+        return round(float(self.item.ponderador) * self.cumplimiento / 100, 1)
 
     @property
     def semaforo(self):
         """verde / ambar / rojo comparando con el avance esperado al día de hoy (RF-12)."""
-        esperado = self.periodo.avance_esperado
+        if not self.meta_ajustada:
+            return 'sin_meta'
+        esperado = self.avance_esperado
         if self.cumplimiento >= esperado:
             return "verde"
         if self.cumplimiento >= esperado * float(self.periodo.umbral_ambar) / 100:
@@ -294,6 +325,20 @@ class Actividad(models.Model):
     contacto_telefono = models.CharField("teléfono del contacto", max_length=20, blank=True)
     ingresa_agenda = models.BooleanField("ingresar a la agenda colectiva", default=False)
     creada_en = models.DateTimeField("creada en", auto_now_add=True)
+    sin_puntaje_por_tope = models.BooleanField(default=False, editable=False)
+    EJECUCION, COORDINACION, OTRA, FELICITACION = 'EJE', 'COO', 'OTR', 'FEL'
+    clasificacion = models.CharField(max_length=3, default=EJECUCION, choices=[
+        (EJECUCION, 'Ejecución final'), (COORDINACION, 'Coordinación'),
+        (OTRA, 'Otra gestión'), (FELICITACION, 'Felicitación')])
+    origen = models.CharField(max_length=3, default='EXT', choices=[('EXT', 'Solicitud externa'), ('INT', 'Actividad interna')])
+    vecino = models.ForeignKey('Vecino', on_delete=models.PROTECT, null=True, blank=True)
+    beneficiario_funcionario = models.ForeignKey(Funcionario, on_delete=models.PROTECT, null=True,
+        blank=True, related_name='actividades_como_beneficiario', verbose_name='beneficiario municipal')
+    hito = models.ForeignKey('Hito', on_delete=models.PROTECT, null=True, blank=True, related_name='actividades')
+    tarea_hito = models.OneToOneField('Compromiso', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='ejecucion', verbose_name='tarea del hito ejecutada')
+    atencion = models.OneToOneField('AtencionCiudadana', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='ejecucion', verbose_name='solicitud ciudadana de origen')
 
     class Meta:
         verbose_name = "actividad"
@@ -304,6 +349,8 @@ class Actividad(models.Model):
         return f"{self.fecha} · {self.item} · {self.funcionario}"
 
     def clean(self):
+        self.normalizar()
+        self.validar_semana()
         if self.fecha and self.fecha > timezone.localdate():
             raise ValidationError({"fecha": "No se pueden registrar actividades con fecha futura."})
         if self.funcionario_id and self.item_id and self.funcionario.cargo_id != self.item.cargo_id:
@@ -312,6 +359,98 @@ class Actividad(models.Model):
             raise ValidationError({"solicitud": "Describe la solicitud con al menos 10 caracteres."})
         if self.accion and len(self.accion.strip()) < 10:
             raise ValidationError({"accion": "Indica la acción ejecutada con al menos 10 caracteres."})
+        if self.vecino_id and self.funcionario_id and self.vecino.delegacion_id != self.funcionario.delegacion_id:
+            raise ValidationError({'vecino': 'El vecino debe pertenecer a la delegación del funcionario.'})
+        if self.hito_id and self.funcionario_id:
+            if self.hito.delegacion_id != self.funcionario.delegacion_id or not self.hito.responsables.filter(pk=self.funcionario_id).exists():
+                raise ValidationError({'hito': 'El funcionario debe ser responsable del hito en su delegación.'})
+        if self.tarea_hito_id and (not self.tarea_hito.hito_id or self.tarea_hito.hito_id != self.hito_id
+                                  or self.tarea_hito.responsable_id != self.funcionario_id):
+            raise ValidationError({'tarea_hito': 'La tarea debe corresponder al hito y al funcionario responsable.'})
+        if self.atencion_id and (self.atencion.delegacion_id != self.funcionario.delegacion_id
+                                or self.atencion.responsable_id != self.funcionario_id):
+            raise ValidationError({'atencion': 'La atención debe corresponder al funcionario y su delegación.'})
+        if self.es_candidata and self.fecha and self.funcionario_id:
+            otras = Actividad.objects.filter(funcionario_id=self.funcionario_id, fecha=self.fecha).exclude(pk=self.pk).select_related('item', 'beneficiario_funcionario')
+            if sum(a.es_candidata for a in otras) >= 7:
+                raise ValidationError('Máximo de siete actividades puntuables por funcionario y día. No se puede registrar otra actividad puntuable en esta fecha.')
+
+    def normalizar(self):
+        if self.atencion_id:
+            self.contacto_nombre = self.contacto_nombre.strip() or self.atencion.solicitante
+            self.contacto_telefono = self.contacto_telefono.strip() or self.atencion.telefono
+        if self.tarea_hito_id:
+            self.hito = self.tarea_hito.hito
+        if self.hito_id:
+            self.origen = 'INT'
+        if self.beneficiario_funcionario_id and self.beneficiario_funcionario.tiene_rol(Rol.DELEGADO):
+            self.clasificacion = self.OTRA
+        if self.vecino_id:
+            self.contacto_nombre = self.contacto_nombre.strip() or self.vecino.nombre
+            self.contacto_telefono = self.contacto_telefono.strip() or self.vecino.telefono
+        if not self.pk and self.funcionario_id and self.item_id and self.fecha:
+            metas = list(MetaFuncionario.objects.filter(funcionario_id=self.funcionario_id, item_id=self.item_id,
+                periodo__fecha_inicio__lte=self.fecha, periodo__fecha_termino__gte=self.fecha))
+            # Un registro nuevo posterior al tope se conserva, pero no ocupa cupo puntuable.
+            self.sin_puntaje_por_tope = bool(metas and all(m.cumplimiento >= 120 for m in metas))
+
+    @staticmethod
+    def semana_cerrada(fecha):
+        # El lunes siguiente está incluido; el cierre comienza el martes a las 00:00 locales.
+        return bool(fecha and timezone.localdate() > fecha - timedelta(days=fecha.weekday()) + timedelta(days=7))
+
+    def validar_semana(self):
+        original = type(self).objects.filter(pk=self.pk).values_list('fecha', flat=True).first() if self.pk else None
+        if self.semana_cerrada(self.fecha) or self.semana_cerrada(original):
+            raise ValidationError('La semana de esta actividad está cerrada desde el martes siguiente. No se permite ingresar ni modificar el registro.')
+
+    @property
+    def motivo_no_puntuable(self):
+        if self.sin_puntaje_por_tope:
+            return 'El ítem ya había alcanzado el tope de 120 % al registrar esta actividad.'
+        if self.atencion_id and (not self.atencion.solicitante.strip() or not self.atencion.telefono.strip()):
+            return 'La solicitud de origen no tiene nombre y teléfono completos.'
+        if self.beneficiario_funcionario_id and self.beneficiario_funcionario.tiene_rol(Rol.DELEGADO):
+            return 'El beneficiario es el delegado: Otra gestión.'
+        if self.clasificacion not in (self.EJECUCION, self.FELICITACION):
+            return 'Las coordinaciones y otras gestiones no generan puntaje.'
+        if not self.contacto_nombre.strip() or not self.contacto_telefono.strip():
+            return 'Falta el nombre o el teléfono del vecino o usuario.'
+        if not self.item_id or not self.item.puntuable or not self.item.vigente:
+            return 'El ítem no está habilitado en el catálogo de puntuación.'
+        if self.item.tipo_resultado != self.clasificacion:
+            return 'La clasificación no corresponde al resultado admitido por el ítem del catálogo.'
+        return ''
+
+    @property
+    def es_candidata(self):
+        return not self.motivo_no_puntuable
+
+    @property
+    def genera_puntaje(self):
+        if not self.es_candidata or not self.pk:
+            return False
+        if self.clasificacion == self.FELICITACION:
+            felicitacion = getattr(self, 'felicitacion', None)
+            return bool(felicitacion and felicitacion.es_valida_para_puntuar)
+        return any(e.estado == Evidencia.APROBADA for e in self.evidencias.all())
+
+    def save(self, *args, **kwargs):
+        # Serializa las escrituras del funcionario también en SQLite, donde
+        # select_for_update no toma bloqueos de fila. Evita dos octavas actividades.
+        with transaction.atomic():
+            if self.funcionario_id:
+                Funcionario.objects.filter(pk=self.funcionario_id).update(last_login=models.F('last_login'))
+            self.clean()
+            anterior = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+            campos = ('item_id', 'fecha', 'solicitud', 'accion', 'contacto_nombre', 'contacto_telefono',
+                      'clasificacion', 'beneficiario_funcionario_id', 'atencion_id', 'hito_id', 'vecino_id')
+            cambiado = anterior and any(getattr(anterior, c) != getattr(self, c) for c in campos)
+            resultado = super().save(*args, **kwargs)
+            if cambiado:
+                self.evidencias.filter(estado=Evidencia.APROBADA).update(estado=Evidencia.PENDIENTE)
+                ReclamoFelicitacion.objects.filter(actividad=self).update(validada_por=None, validada_en=None)
+            return resultado
 
     @property
     def estado_evidencia(self):
@@ -405,6 +544,7 @@ class Compromiso(models.Model):
     estado = models.CharField("estado", max_length=3, choices=ESTADOS, default=INGRESADO)
     observacion = models.TextField("avance u observaciones", blank=True)
     creado_en = models.DateTimeField("creado en", auto_now_add=True)
+    hito = models.ForeignKey('Hito', on_delete=models.PROTECT, null=True, blank=True, related_name='tareas')
 
     class Meta:
         verbose_name = "compromiso"
@@ -415,6 +555,11 @@ class Compromiso(models.Model):
         return self.descripcion
 
     def clean(self):
+        if self.hito_id:
+            if self.delegacion_id != self.hito.delegacion_id:
+                raise ValidationError({'hito': 'El hito debe pertenecer a la misma delegación.'})
+            if self.responsable_id and not self.hito.responsables.filter(pk=self.responsable_id).exists():
+                raise ValidationError({'responsable': 'El responsable debe estar asignado al hito.'})
         if self.fecha_comprometida and not self.pk and self.fecha_comprometida < timezone.localdate():
             raise ValidationError({"fecha_comprometida": "La fecha comprometida no puede estar en el pasado."})
         if self.responsable_id and self.delegacion_id and self.responsable.delegacion_id != self.delegacion_id:
@@ -466,6 +611,15 @@ class ReclamoFelicitacion(models.Model):
     descripcion = models.TextField("descripción")
     estado = models.CharField("estado", max_length=3, choices=ESTADOS, default="ING")
     fecha = models.DateTimeField("fecha de registro", auto_now_add=True)
+    telefono = models.CharField('teléfono del vecino', max_length=20, blank=True)
+    proviene_de_vecino = models.BooleanField('proviene directamente de un vecino o usuario', default=False)
+    dirigida_a = models.CharField(max_length=5, default='PERS', choices=[
+        ('DELEG', 'Delegado'), ('DEL', 'Delegación'), ('PERS', 'Funcionario / mensaje personal')])
+    respaldo = models.FileField('respaldo formal', upload_to='felicitaciones/%Y/%m/', blank=True)
+    actividad = models.OneToOneField(Actividad, on_delete=models.PROTECT, null=True, blank=True, related_name='felicitacion')
+    validada_por = models.ForeignKey(Funcionario, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='felicitaciones_validadas', editable=False)
+    validada_en = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "reclamo o felicitación"
@@ -482,6 +636,38 @@ class ReclamoFelicitacion(models.Model):
             raise ValidationError({"funcionario": "Indica a qué funcionario corresponde la felicitación."})
         if self.funcionario_id and self.delegacion_id and self.funcionario.delegacion_id != self.delegacion_id:
             raise ValidationError({"funcionario": "El funcionario no pertenece a la delegación indicada."})
+        if self.actividad_id and (self.actividad.funcionario_id != self.funcionario_id or
+                                   self.actividad.clasificacion != Actividad.FELICITACION):
+            raise ValidationError({'actividad': 'Selecciona una actividad de tipo Felicitación del funcionario involucrado.'})
+
+    @property
+    def es_valida_para_puntuar(self):
+        return bool(self.tipo == self.FELICITACION and self.proviene_de_vecino and
+                    self.dirigida_a in ('DELEG', 'DEL') and self.respaldo and self.vecino.strip() and
+                    self.telefono.strip() and self.validada_por_id and self.validada_en and self.actividad_id)
+
+    def validar(self, usuario):
+        if not usuario.tiene_rol(Rol.DELEGADO) or usuario.delegacion_id != self.delegacion_id:
+            raise ValidationError('Solo el delegado de esta delegación puede validar la felicitación.')
+        if not (self.tipo == self.FELICITACION and self.proviene_de_vecino and self.dirigida_a in ('DELEG', 'DEL')
+                and self.respaldo and self.vecino.strip() and self.telefono.strip() and self.actividad_id):
+            raise ValidationError('Para validar se requiere origen vecinal, destinatario delegado/delegación, nombre, teléfono, respaldo formal y actividad de felicitación.')
+        self.clean()
+        if not self.actividad.es_candidata:
+            raise ValidationError(self.actividad.motivo_no_puntuable)
+        self.validada_por, self.validada_en = usuario, timezone.now()
+        self.save(update_fields=['validada_por', 'validada_en'])
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            anterior = type(self).objects.get(pk=self.pk)
+            campos = ('tipo', 'funcionario_id', 'delegacion_id', 'vecino', 'telefono', 'descripcion',
+                      'proviene_de_vecino', 'dirigida_a', 'respaldo', 'actividad_id')
+            if any(getattr(anterior, c) != getattr(self, c) for c in campos):
+                self.validada_por = self.validada_en = None
+                if kwargs.get('update_fields'):
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'validada_por', 'validada_en'}
+        return super().save(*args, **kwargs)
 
 
 class Notificacion(models.Model):
@@ -542,8 +728,10 @@ class SubAtencion(models.Model):
     class Meta: ordering = ['nombre']; verbose_name = 'subatención'
 
 class AtencionCiudadana(models.Model):
-    solicitante = models.CharField(max_length=160)
+    solicitante = models.CharField(max_length=160, blank=True)
     contacto = models.CharField(max_length=100, blank=True)
+    telefono = models.CharField('teléfono del solicitante', max_length=20, blank=True)
+    vecino = models.ForeignKey('Vecino', on_delete=models.PROTECT, null=True, blank=True)
     tipo = models.ForeignKey(TipoAtencion, on_delete=models.PROTECT)
     subatencion = models.ForeignKey(SubAtencion, on_delete=models.PROTECT)
     descripcion = models.TextField()
@@ -553,6 +741,13 @@ class AtencionCiudadana(models.Model):
     def __str__(self): return f'AT-{self.pk or "nuevo"} · {self.solicitante}'
     def clean(self):
         super().clean()
+        if self.vecino_id:
+            self.solicitante = self.solicitante.strip() or self.vecino.nombre
+            self.telefono = self.telefono.strip() or self.vecino.telefono
+            if self.delegacion_id and self.vecino.delegacion_id != self.delegacion_id:
+                raise ValidationError({'vecino': 'El vecino debe pertenecer a la delegación de la atención.'})
+        if self.fecha_registro and Actividad.semana_cerrada(timezone.localtime(self.fecha_registro).date()):
+            raise ValidationError('La semana de esta solicitud está cerrada. No se permite modificarla.')
         if self.tipo_id and self.subatencion_id and self.subatencion.tipo_id != self.tipo_id:
             raise ValidationError({'subatencion':'No corresponde al tipo de atención elegido.'})
         if self.tipo_id and not self.tipo.activo:
@@ -570,3 +765,124 @@ class CodigoRecuperacion(models.Model):
     verificado = models.BooleanField(default=False)
     utilizado = models.BooleanField(default=False)
     class Meta: ordering = ['-creado']
+
+
+class Organizacion(models.Model):
+    nombre = models.CharField(max_length=160)
+    tipo = models.CharField(max_length=2, choices=[('JV', 'Junta de vecinos'), ('OC', 'Organización comunitaria')])
+    domicilio_legal = models.CharField(max_length=200)
+    territorio = models.CharField(max_length=100)
+    delegacion = models.ForeignKey(Delegacion, on_delete=models.PROTECT, related_name='organizaciones')
+    socios_activos = models.PositiveIntegerField(null=True, blank=True)
+    fecha_constitucion = models.DateField('fecha de constitución')
+    registro_personalidad = models.CharField('número de personalidad jurídica', max_length=80)
+    fecha_inscripcion = models.DateField('fecha de inscripción')
+    numero_registro = models.CharField('número de registro', max_length=80)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'organización'
+        verbose_name_plural = 'organizaciones'
+
+    def __str__(self):
+        return self.nombre
+
+    def clean(self):
+        if self.fecha_constitucion and self.fecha_inscripcion and self.fecha_inscripcion < self.fecha_constitucion:
+            raise ValidationError({'fecha_inscripcion': 'La inscripción no puede ser anterior a la constitución.'})
+
+
+class Vecino(models.Model):
+    nombre = models.CharField(max_length=160)
+    telefono = models.CharField('teléfono', max_length=20)
+    direccion = models.CharField('dirección', max_length=200, blank=True)
+    territorio = models.CharField(max_length=100)
+    delegacion = models.ForeignKey(Delegacion, on_delete=models.PROTECT, related_name='vecinos')
+    activo = models.BooleanField(default=True)
+    organizaciones = models.ManyToManyField(Organizacion, through='Membresia', related_name='vecinos')
+
+    class Meta:
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    @property
+    def pertenece_junta(self):
+        return self.membresias.filter(activa=True, organizacion__tipo='JV', organizacion__activa=True).exists()
+
+
+class Membresia(models.Model):
+    vecino = models.ForeignKey(Vecino, on_delete=models.PROTECT, related_name='membresias')
+    organizacion = models.ForeignKey(Organizacion, on_delete=models.PROTECT, related_name='membresias')
+    rol = models.CharField(max_length=3, choices=[('SOC', 'Socio/a'), ('DIR', 'Dirigente')], default='SOC')
+    cargo = models.CharField('cargo en la organización', max_length=100, blank=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'pertenencia a organización'
+        constraints = [models.UniqueConstraint(fields=['vecino', 'organizacion'], name='membresia_vecino_organizacion_unica')]
+
+    def __str__(self):
+        return f'{self.vecino} · {self.organizacion} · {self.get_rol_display()}'
+
+    def clean(self):
+        if self.vecino_id and self.organizacion_id and self.vecino.delegacion_id != self.organizacion.delegacion_id:
+            raise ValidationError({'organizacion': 'El vecino y la organización deben pertenecer a la misma delegación.'})
+
+
+class Hito(models.Model):
+    nombre = models.CharField(max_length=160)
+    descripcion = models.TextField('descripción')
+    fecha_inicio = models.DateField()
+    fecha_termino = models.DateField('fecha de término', null=True, blank=True)
+    territorio = models.CharField(max_length=100)
+    delegacion = models.ForeignKey(Delegacion, on_delete=models.PROTECT, related_name='hitos')
+    recursos = models.TextField('recursos asociados', blank=True)
+    responsables = models.ManyToManyField(Funcionario, related_name='hitos_responsables')
+    estado = models.CharField(max_length=3, default='PLA', choices=[
+        ('PLA', 'Planificado'), ('PRO', 'En ejecución'), ('FIN', 'Finalizado'), ('CAN', 'Cancelado')])
+    recurrente = models.BooleanField(default=False)
+    periodicidad = models.CharField(max_length=80, blank=True, help_text='Ejemplo: anual, cada diciembre.')
+    creado_por = models.ForeignKey(Funcionario, on_delete=models.PROTECT, related_name='hitos_creados', editable=False)
+
+    class Meta:
+        ordering = ['fecha_inicio', 'nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_termino and self.fecha_termino < self.fecha_inicio:
+            raise ValidationError({'fecha_termino': 'El término no puede ser anterior al inicio.'})
+        if self.recurrente and not self.periodicidad.strip():
+            raise ValidationError({'periodicidad': 'Indica la periodicidad del evento recurrente.'})
+        if not self.recurrente:
+            self.periodicidad = ''
+        if self.creado_por_id and not (self.creado_por.is_superuser or self.creado_por.tiene_rol(Rol.ADMINISTRADOR, Rol.DELEGADO)):
+            raise ValidationError('Solo un delegado o administrador puede crear hitos.')
+
+
+class Ausencia(models.Model):
+    funcionario = models.ForeignKey(Funcionario, on_delete=models.PROTECT, related_name='ausencias')
+    tipo = models.CharField(max_length=3, choices=[('LIB', 'Día libre'), ('VAC', 'Vacaciones'),
+        ('ADM', 'Día administrativo'), ('LIC', 'Licencia'), ('OTR', 'Otra ausencia justificada')])
+    fecha_inicio = models.DateField()
+    fecha_termino = models.DateField('fecha de término')
+    motivo = models.CharField('justificación', max_length=250)
+    activa = models.BooleanField(default=True)
+    registrada_por = models.ForeignKey(Funcionario, on_delete=models.PROTECT, related_name='ausencias_registradas', editable=False)
+
+    class Meta:
+        ordering = ['-fecha_inicio']
+
+    def __str__(self):
+        return f'{self.funcionario} · {self.get_tipo_display()} · {self.fecha_inicio} / {self.fecha_termino}'
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_termino and self.fecha_termino < self.fecha_inicio:
+            raise ValidationError({'fecha_termino': 'El término no puede ser anterior al inicio.'})
+        if self.registrada_por_id and self.funcionario_id:
+            if not self.registrada_por.tiene_rol(Rol.DELEGADO) or self.registrada_por.delegacion_id != self.funcionario.delegacion_id:
+                raise ValidationError('Solo el delegado de la delegación puede registrar ausencias.')

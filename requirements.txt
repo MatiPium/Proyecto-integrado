@@ -3,3 +3,4 @@ Pillow>=10.0
 mysqlclient>=2.2   # solo si conectan el proyecto a MySQL
 
 openpyxl>=3.1,<4.0
+holidays>=0.80,<1.0

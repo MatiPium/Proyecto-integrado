@@ -28,7 +28,7 @@ class DelegacionAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "cargo", "ponderador", "vigente")
+    list_display = ("nombre", "cargo", "ponderador", "vigente", "puntuable", "tipo_resultado")
     list_filter = ("cargo", "vigente")
 
 
@@ -43,6 +43,10 @@ class ActividadAdmin(admin.ModelAdmin):
     list_display = ("fecha", "funcionario", "item", "estado_evidencia")
     list_filter = ("item__cargo", "funcionario__delegacion", "fecha")
     search_fields = ("solicitud", "accion")
+
+    def has_delete_permission(self, request, obj=None):
+        # Las actividades se eliminan desde el flujo que comprueba cierre y evidencias.
+        return False
 
 
 @admin.register(Evidencia)

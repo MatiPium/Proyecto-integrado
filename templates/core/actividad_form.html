@@ -6,7 +6,7 @@
   {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
   <form method="post" novalidate>{% csrf_token %}
     <div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
-    <p class="form-note small">La actividad se registra con tu usuario. Podrás adjuntar fotografías después de guardarla.</p>
+    <p class="form-note small">Para puntuar se requiere nombre, teléfono, una ejecución válida del catálogo y evidencia aprobada (o felicitación validada por el delegado). Coordinaciones y otras gestiones se conservan sin puntaje. Máximo: siete actividades puntuables al día. El registro semanal cierra el martes siguiente.</p>
     <div class="form-actions"><a class="btn btn-secondary" href="{% url 'actividad_list' %}">Cancelar</a><button class="btn btn-primary" type="submit">Guardar actividad</button></div>
   </form>
 </section>

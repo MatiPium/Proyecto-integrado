@@ -87,6 +87,7 @@ for _clave in sv.CATALOGOS:
 urlpatterns += [
     path('atenciones/',sv.AtencionList.as_view(),name='atencion_list'),
     path('atenciones/nueva/',sv.AtencionCreate.as_view(),name='atencion_create'),
+    path('atenciones/<int:pk>/editar/',sv.AtencionUpdate.as_view(),name='atencion_update'),
     path('api/subatenciones/',sv.subatenciones_json,name='subatenciones_json'),
     path('contexto/delegacion/',sv.cambiar_delegacion,name='cambiar_delegacion'),
     path('recuperar/',sv.recuperar_solicitar,name='recuperar_solicitar'),
@@ -95,3 +96,15 @@ urlpatterns += [
 ]
 
 urlpatterns += [path('funcionarios/excel/',sv.exportar_usuarios,name='usuarios_excel')]
+
+from . import comunidad_views as cv
+for _clave, (_modelo, _form, _nombre, _campo, _activo) in cv.MODULOS.items():
+    _base = {'model': _modelo, 'clave': _clave}
+    urlpatterns += [
+        path(f'comunidad/{_clave}/', type(f'{_clave}List', (cv.TerritorialList,), _base).as_view(), name=f'{_clave}_list'),
+        path(f'comunidad/{_clave}/nuevo/', type(f'{_clave}Create', (cv.TerritorialCreate,), dict(_base, form_class=_form)).as_view(), name=f'{_clave}_create'),
+        path(f'comunidad/{_clave}/<int:pk>/', type(f'{_clave}Detalle', (cv.TerritorialDetalle,), _base).as_view(), name=f'{_clave}_detalle'),
+        path(f'comunidad/{_clave}/<int:pk>/editar/', type(f'{_clave}Update', (cv.TerritorialUpdate,), dict(_base, form_class=_form)).as_view(), name=f'{_clave}_update'),
+        path(f'comunidad/{_clave}/<int:pk>/desactivar/', cv.desactivar, {'clave': _clave}, name=f'{_clave}_disable'),
+    ]
+urlpatterns += [path('reclamos/<int:pk>/validar/', cv.validar_felicitacion, name='felicitacion_validar')]

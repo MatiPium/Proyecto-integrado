@@ -72,7 +72,8 @@ class ValidacionesModelo(BaseDatos):
         meta = MetaFuncionario.objects.create(funcionario=self.func, item=self.item, periodo=self.periodo,
                                               valor_objetivo=10, definida_por=self.coord)
         actividad = Actividad.objects.create(funcionario=self.func, item=self.item, fecha=date.today(),
-                                             solicitud="Solicitud de prueba larga", accion="Acción de prueba larga")
+                                             solicitud="Solicitud de prueba larga", accion="Acción de prueba larga",
+                                             contacto_nombre='Vecina de prueba', contacto_telefono='912345678')
         evidencia = Evidencia.objects.create(actividad=actividad, archivo="evidencias/x.jpg")
         self.assertEqual(meta.avance, 0)
         Validacion.objects.create(evidencia=evidencia, verificador=self.verif,

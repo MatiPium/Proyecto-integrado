@@ -1,13 +1,19 @@
-{% extends "base.html" %}
-{% block titulo %}Tablero de cumplimiento{% endblock %}
+{% extends 'base.html' %}
 {% block contenido %}
-<div class="summary-grid">
-<div class="card stat-card"><div class="stat-label">Delegaciones activas</div><div class="stat-number">{{ filas|length }}</div></div>
-<div class="card stat-card"><div class="stat-label">Avance esperado</div><div class="stat-number">{{ esperado }} %</div></div>
-<div class="card stat-card"><div class="stat-label">Período de gestión</div><div class="stat-period">{{ periodo|default:'Sin período abierto' }}</div></div>
-</div>
-<section class="panel"><div class="panel-header"><h2>Cumplimiento por delegación</h2><a href="{% url 'meta_list' %}" class="btn btn-outline-secondary">Consultar metas</a></div>
-<div class="table-responsive"><table class="table"><thead><tr><th>Delegación</th><th>Funcionarios</th><th>Cumplimiento</th><th>Semáforo</th><th>Compromisos</th><th>Realizados</th><th>Reclamos</th><th>Felicitaciones</th></tr></thead><tbody>
-{% for f in filas %}<tr><td class="fw-semibold">{{ f.delegacion }}</td><td>{{ f.funcionarios }}</td><td class="fw-semibold">{{ f.cumplimiento }} %</td><td><span class="badge badge-{{ f.semaforo }}">{{ f.semaforo|capfirst }}</span></td><td>{{ f.compromisos }}</td><td>{{ f.realizados }}</td><td>{{ f.reclamos }}</td><td>{{ f.felicitaciones }}</td></tr>{% empty %}<tr><td colspan="8" class="empty-state">No hay delegaciones activas.</td></tr>{% endfor %}
-</tbody></table></div><p class="panel-note">Los colores se determinan por el avance esperado del período y los resultados registrados.</p></section>
+<form method="get" class="d-flex gap-2 mb-4"><label for="periodo">Período</label><select id="periodo" name="periodo" class="form-select">{% for p in periodos %}<option value="{{ p.pk }}" {% if p.pk == periodo.pk %}selected{% endif %}>{{ p }}</option>{% endfor %}</select><button class="btn btn-primary">Consultar</button></form>
+{% if not periodo %}<p class="alert alert-info">Selecciona un período con metas para consultar resultados.</p>{% endif %}
+<p>Metas ajustadas por ausencias en días hábiles, excluyendo feriados públicos de Chile. Tope por ítem: 120 %. El resultado individual pondera las metas evaluables; el colectivo promedia los resultados individuales. Los funcionarios sin meta evaluable se informan por separado.</p>
+{% for titulo, filas in colectivos %}
+<section class="panel mb-4"><div class="panel-header"><h2>{{ titulo }}</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Grupo</th><th>Funcionarios</th><th>Evaluados</th><th>Cumplimiento</th><th>Verde</th><th>Ámbar</th><th>Rojo</th><th>Sin meta evaluable</th></tr></thead><tbody>
+{% for f in filas %}<tr><td>{{ f.nombre }}</td><td>{{ f.funcionarios }}</td><td>{{ f.evaluados }}</td><td>{{ f.cumplimiento|default_if_none:'—' }}{% if f.cumplimiento != None %} %{% endif %}</td><td>{{ f.verdes }}</td><td>{{ f.ambar }}</td><td>{{ f.rojos }}</td><td>{{ f.sin_meta }}</td></tr>{% empty %}<tr><td colspan="8">Sin resultados.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endfor %}
+<section class="panel mb-4"><div class="panel-header"><h2>Seguimiento operativo acumulado</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Delegación</th><th>Compromisos</th><th>Realizados</th><th>Reclamos</th><th>Felicitaciones registradas</th></tr></thead><tbody>{% for o in operaciones %}<tr><td>{{ o.delegacion }}</td><td>{{ o.compromisos }}</td><td>{{ o.realizados }}</td><td>{{ o.reclamos }}</td><td>{{ o.felicitaciones }}</td></tr>{% empty %}<tr><td colspan="5">Sin delegaciones disponibles.</td></tr>{% endfor %}</tbody></table></div><p class="panel-note">Estos contadores incluyen el historial completo; las felicitaciones registradas pueden estar pendientes de validación y no equivalen a puntaje.</p></section>
+<section class="panel mb-4"><div class="panel-header"><h2>Cumplimiento individual y distribución del equipo</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Funcionario</th><th>Delegación</th><th>Cumplimiento</th><th>Esperado a hoy</th><th>Semáforo</th></tr></thead><tbody>
+{% for p in individuales %}<tr><td>{{ p.funcionario }}</td><td>{{ p.funcionario.delegacion }}</td><td>{{ p.cumplimiento|default_if_none:'—' }}</td><td>{{ p.esperado|default_if_none:'—' }}</td><td><span class="badge badge-{{ p.semaforo }}">{% if p.semaforo == 'sin_meta' %}Sin meta evaluable{% else %}{{ p.semaforo|capfirst }}{% endif %}</span></td></tr>{% empty %}<tr><td colspan="5">Sin funcionarios.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="panel mb-4 p-3"><h2>Funcionarios bajo el avance esperado</h2><ul>{% for p in bajos %}<li>{{ p.funcionario }} · {{ p.cumplimiento }} % (esperado: {{ p.esperado }} %)</li>{% empty %}<li>Ninguno en el período seleccionado.</li>{% endfor %}</ul></section>
+<section class="panel"><div class="panel-header"><h2>Ítems bajo el avance esperado</h2></div><div class="table-responsive"><table class="table"><thead><tr><th>Funcionario</th><th>Ítem</th><th>Meta original</th><th>Meta ajustada</th><th>Ejecuciones válidas</th><th>Cumplimiento</th></tr></thead><tbody>
+{% for d in items_bajos %}<tr><td>{{ d.funcionario }}</td><td>{{ d.meta.item }}</td><td>{{ d.meta.valor_objetivo }}</td><td>{{ d.objetivo|floatformat:2 }}</td><td>{{ d.avance }}</td><td>{{ d.cumplimiento }} %</td></tr>{% empty %}<tr><td colspan="6">Sin ítems bajo el avance esperado.</td></tr>{% endfor %}
+</tbody></table></div></section>
 {% endblock %}

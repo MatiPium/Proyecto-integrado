@@ -26,6 +26,15 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'clave-desarrollo-local-insegur
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
+# En desarrollo se permite HTTP; en produccion se requiere HTTPS.
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+# Empezar con una hora y ampliar tras comprobar HTTPS en el servidor.
+SECURE_HSTS_SECONDS = 0 if DEBUG else 3600
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS','127.0.0.1,localhost').split(',') if h.strip()]
 
 
@@ -118,6 +127,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+# Destino generado por collectstatic para servir los estaticos en produccion.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Email

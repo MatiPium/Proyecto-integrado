@@ -4,6 +4,8 @@
 <section class="panel mb-4">
   <div class="panel-header"><h2>Actividad del {{ actividad.fecha|date:'d/m/Y' }}</h2><a href="{% url 'actividad_list' %}" class="btn btn-outline-secondary btn-sm">Volver a actividades</a></div>
   <div class="form-grid"><dl class="detail-field"><dt>Funcionario</dt><dd>{{ actividad.funcionario }}</dd></dl><dl class="detail-field"><dt>Ítem de gestión</dt><dd>{{ actividad.item.nombre }}</dd></dl></div>
+  <p>{{ actividad.get_clasificacion_display }} · {{ actividad.get_origen_display }}{% if actividad.hito %} · Hito: {{ actividad.hito }}{% endif %}</p>
+  <p>{% if actividad.motivo_no_puntuable %}Sin puntaje: {{ actividad.motivo_no_puntuable }}{% elif actividad.genera_puntaje %}Ejecución válida para la meta, sujeta al tope de 120 %.{% else %}Pendiente de evidencia aprobada o de validación formal de la felicitación.{% endif %}</p>
   <details class="mb-4"><summary>Ver información de la actividad</summary><dl class="mt-3"><dt>Solicitud</dt><dd>{{ actividad.solicitud }}</dd><dt>Acción realizada</dt><dd>{{ actividad.accion }}</dd><dt>Tipo de atención</dt><dd>{{ actividad.tipo_atencion|default:'—' }}</dd><dt>Contacto</dt><dd>{{ actividad.contacto_nombre|default:'—' }} {{ actividad.contacto_telefono }}</dd><dt>Agenda colectiva</dt><dd>{{ actividad.ingresa_agenda|yesno:'Sí,No' }}</dd></dl></details>
   {% if form_evidencia.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form_evidencia.non_field_errors }}</div>{% endif %}
   <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}

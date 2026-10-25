@@ -4,7 +4,7 @@
 <section class="panel form-panel">
   <h2>{% if object %}Editar registro{% elif request.resolver_match.url_name == 'meta_create' %}Nueva meta de gestión{% elif request.resolver_match.url_name == 'reclamo_create' %}Nuevo registro ciudadano{% else %}Nuevo registro{% endif %}</h2>
   {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
-  <form method="post" novalidate>{% csrf_token %}
+  <form method="post" enctype="multipart/form-data" novalidate>{% csrf_token %}
     <div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
     <p class="form-note small">Los campos marcados con * son obligatorios.</p>
     <div class="form-actions"><a class="btn btn-secondary" href="{% url ui_back_route %}">Cancelar</a><button class="btn btn-primary" type="submit">Guardar{% if request.resolver_match.url_name == 'meta_create' %} configuración{% endif %}</button></div>

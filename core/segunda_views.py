@@ -138,6 +138,9 @@ def exportar_catalogo(request,clave):
 
 class AtencionCreate(LoginRequiredMixin,CreateView):
     model=AtencionCiudadana;form_class=AtencionCiudadanaForm;template_name='core/atencion_form.html'
+    def get_form_kwargs(self):
+        return dict(super().get_form_kwargs(), usuario=self.request.user,
+                    delegacion_id=self.request.session.get('delegacion_activa_id') or self.request.user.delegacion_id)
     def form_valid(self,form):
         usuario=self.request.user
         delegacion_id=self.request.session.get('delegacion_activa_id') or usuario.delegacion_id
@@ -166,6 +169,43 @@ class AtencionList(LoginRequiredMixin,ListView):
         q=self.request.GET.get('q','').strip()
         if q: qs=qs.filter(Q(solicitante__icontains=q)|Q(descripcion__icontains=q))
         return qs
+
+
+class AtencionUpdate(LoginRequiredMixin, UpdateView):
+    model = AtencionCiudadana
+    form_class = AtencionCiudadanaForm
+    template_name = 'core/atencion_form.html'
+    success_url = reverse_lazy('atencion_list')
+
+    def get_queryset(self):
+        from .comunidad_forms import alcance
+        qs = alcance(self.request.user, AtencionCiudadana.objects.all())
+        if not (self.request.user.es_coordinacion or self.request.user.is_superuser):
+            qs = qs.filter(responsable=self.request.user)
+        return qs
+
+    def get_form_kwargs(self):
+        return dict(super().get_form_kwargs(), usuario=self.request.user, delegacion_id=self.object.delegacion_id)
+
+    def form_valid(self, form):
+        # Completar el contacto de una solicitud puede volver puntuable su ejecución.
+        # Se revalida el límite diario dentro de la misma transacción.
+        from .models import Actividad
+        try:
+            with transaction.atomic():
+                response = super().form_valid(form)
+                actividad = Actividad.objects.filter(atencion=self.object).first()
+                if actividad:
+                    actividad.contacto_nombre = self.object.solicitante
+                    actividad.contacto_telefono = self.object.telefono
+                    actividad.save()
+                Auditoria.objects.create(funcionario=self.request.user, evento='EDITAR', entidad='AtencionCiudadana',
+                    registro_id=str(self.object.pk), detalle='Datos de la solicitud actualizados')
+        except ValidationError as exc:
+            form.add_error(None, ' '.join(exc.messages))
+            return self.form_invalid(form)
+        messages.success(self.request, 'Atención actualizada.')
+        return response
 
 def subatenciones_json(request):
     if not request.user.is_authenticated: return JsonResponse({'error':'No autorizado'},status=403)

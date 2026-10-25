@@ -3,14 +3,14 @@
 {% block contenido %}
 <p class="welcome-line"><strong>Hola, {{ user.first_name|default:user.username }}.</strong> {{ user.cargo|default:'Sin cargo' }} · {{ user.delegacion|default:'Sin delegación' }}{% if periodo %} · {{ periodo }}{% endif %}</p>
 <div class="summary-grid">
-  <div class="card stat-card"><div class="stat-label">Cumplimiento ponderado</div><div class="stat-number">{{ cumplimiento_total }} %</div></div>
+  <div class="card stat-card"><div class="stat-label">Cumplimiento ponderado</div><div class="stat-number">{{ cumplimiento_total|default_if_none:'Sin meta' }}{% if cumplimiento_total != None %} %{% endif %}</div></div>
   <div class="card stat-card"><div class="stat-label">Evidencias pendientes</div><div class="stat-number">{{ pendientes }}</div></div>
   <div class="card stat-card"><div class="stat-label">Compromisos abiertos</div><div class="stat-number">{{ compromisos }}</div></div>
 </div>
 <section class="panel mb-4"><div class="panel-header"><h2>Cumplimiento por ítem de gestión</h2></div>
 <div class="table-responsive"><table class="table"><thead><tr><th>Ítem</th><th>Ponderador</th><th>Meta</th><th>Avance</th><th>Cumplimiento</th><th>Semáforo</th></tr></thead><tbody>
-  {% for m in metas %}<tr><td>{{ m.item.nombre }}</td><td>{{ m.item.ponderador }} %</td><td>{{ m.valor_objetivo }}</td><td>{{ m.avance }}</td><td class="fw-semibold">{{ m.cumplimiento }} %</td><td><span class="badge badge-{{ m.semaforo }}">{{ m.semaforo|capfirst }}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">Aún no tienes metas definidas para el período.</td></tr>{% endfor %}
-</tbody></table></div><p class="panel-note">{% if periodo %}Avance esperado al día de hoy: {{ periodo.avance_esperado }} %.{% else %}No hay un período abierto.{% endif %} Solo las evidencias aprobadas suman al avance.</p></section>
+  {% for m in metas %}<tr><td>{{ m.item.nombre }}</td><td>{{ m.item.ponderador }} %</td><td>{{ m.meta_ajustada|floatformat:2 }} (original: {{ m.valor_objetivo }})</td><td>{{ m.avance }}</td><td class="fw-semibold">{{ m.cumplimiento }} %</td><td><span class="badge badge-{{ m.semaforo }}">{% if m.semaforo == 'sin_meta' %}Sin meta evaluable{% else %}{{ m.semaforo|capfirst }}{% endif %}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">Aún no tienes metas definidas para el período.</td></tr>{% endfor %}
+</tbody></table></div><p class="panel-note">Avance esperado personal al día de hoy: {{ avance_esperado_personal|default_if_none:'Sin meta evaluable' }}. Se consideran ausencias y feriados. Solo las ejecuciones válidas con evidencia aprobada o felicitación validada suman al avance.</p></section>
 <section class="panel"><div class="panel-header"><h2>Últimas actividades</h2><a class="btn btn-primary" href="{% url 'actividad_create' %}">+ Registrar actividad</a></div>
 <div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Ítem</th><th>Solicitud</th><th>Evidencia</th><th class="text-end">Detalle</th></tr></thead><tbody>
 {% for a in actividades %}<tr><td>{{ a.fecha|date:'d/m/Y' }}</td><td>{{ a.item.nombre }}</td><td>{{ a.solicitud|truncatechars:60 }}</td><td>{{ a.estado_evidencia }}</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'actividad_detalle' a.pk %}">Ver actividad</a></td></tr>{% empty %}<tr><td colspan="5" class="empty-state">Todavía no registras actividades.</td></tr>{% endfor %}

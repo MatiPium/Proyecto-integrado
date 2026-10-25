@@ -12,7 +12,7 @@
   <tbody>
   {% for o in metas %}
     <tr><td class="fw-bold">{{ o.funcionario }}</td><td>{{ o.item.nombre }}</td>
-      <td>{{ o.periodo }}</td><td>{{ o.valor_objetivo }}</td><td>{{ o.avance }}</td>
+      <td>{{ o.periodo }}</td><td>{{ o.meta_ajustada|floatformat:2 }} <small>(original: {{ o.valor_objetivo }})</small></td><td>{{ o.avance }}</td>
       <td><span class="badge badge-{{ o.semaforo }}">{{ o.cumplimiento }}%</span></td>
       <td class="text-end">
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'meta_update' o.pk %}">Editar</a>

@@ -80,8 +80,63 @@ Además: bandeja de verificación de evidencias (CU-08), indicadores por delegac
 
 ## Pruebas
 
+El incremento de vecinos, organizaciones, hitos, puntuación y ausencias está
+documentado en [Requerimientos territoriales](docs/requerimientos_territoriales.md),
+incluyendo comparación con lo anterior, reglas, casos de uso, modelo y pruebas.
+Al actualizar el proyecto, instala las dependencias y aplica las migraciones:
+
+```powershell
+python -m pip install -r requirements.txt
+python manage.py migrate
+```
+
+El calendario de metas excluye fines de semana y feriados públicos de Chile
+(Coquimbo). En Administración → Ítems se configura si cada acción puntúa y si
+admite una ejecución final o una felicitación validada. Los módulos nuevos se
+acceden desde Vecinos y organizaciones, Hitos y festividades y Ausencias.
+
 ```bash
 python manage.py test core
+```
+
+## Comprobaciones de desarrollo y produccion
+
+Para el entorno local (HTTP y `DEBUG=True`), ejecuta:
+
+```powershell
+python manage.py check
+```
+
+`check --deploy` revisa la configuracion de produccion. Es normal que muestre
+advertencias de HTTPS y DEBUG si se ejecuta con la configuracion local.
+Para comprobar el modo de produccion desde PowerShell:
+
+```powershell
+$env:DJANGO_DEBUG = '0'
+python manage.py check --deploy
+```
+
+Con `DJANGO_DEBUG=0` se desactiva DEBUG, se redirige HTTP a HTTPS, se usan
+cookies de sesion y CSRF seguras y se habilita HSTS durante una hora.
+Usa este modo en un servidor con HTTPS configurado. HSTS no se extiende a
+subdominios ni solicita inclusion en listas de precarga.
+Por eso pueden aparecer `security.W005` y `security.W021`: esas opciones
+requieren comprobar primero HTTPS en todos los subdominios y decidir si se
+quiere solicitar la precarga del dominio en los navegadores. No se habilitan
+automaticamente para eliminar advertencias.
+
+Antes de publicar, configura `DJANGO_ALLOWED_HOSTS` con los dominios reales
+(separados por comas) y `DJANGO_SECRET_KEY` con una clave aleatoria privada,
+distinta de la clave de desarrollo incluida en el proyecto. Conserva esa clave
+en las variables del servidor, fuera del repositorio. Si usas un proxy que
+termina HTTPS, configura el reconocimiento de HTTPS segun tu infraestructura
+antes de activar las redirecciones.
+
+Para volver al desarrollo local en la misma terminal:
+
+```powershell
+$env:DJANGO_DEBUG = '1'
+python manage.py runserver
 ```
 
 ## Cambiar de SQLite a MySQL

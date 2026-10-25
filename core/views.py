@@ -9,6 +9,8 @@ iniciada y, cuando corresponde, un rol determinado (RNF-05).
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import Count, Q
+from django.db import transaction
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
@@ -28,6 +30,8 @@ class RolRequeridoMixin(LoginRequiredMixin, UserPassesTestMixin):
     roles_permitidos = ()
 
     def test_func(self):
+        if self.request.user.is_superuser:
+            return True
         if not self.roles_permitidos:
             return True
         return self.request.user.tiene_rol(*self.roles_permitidos)
@@ -45,7 +49,12 @@ class MensajeMixin:
     mensaje_exito = "Registro guardado correctamente."
 
     def form_valid(self, form):
-        respuesta = super().form_valid(form)
+        try:
+            with transaction.atomic():
+                respuesta = super().form_valid(form)
+        except ValidationError as exc:
+            form.add_error(None, ' '.join(exc.messages))
+            return self.form_invalid(form)
         messages.success(self.request, self.mensaje_exito)
         Auditoria.objects.create(
             funcionario=self.request.user,
@@ -75,7 +84,10 @@ class InicioView(LoginRequiredMixin, TemplateView):
         metas = MetaFuncionario.objects.filter(funcionario=usuario, periodo=periodo) if periodo else []
         ctx["periodo"] = periodo
         ctx["metas"] = metas
-        ctx["cumplimiento_total"] = round(sum(m.resultado_ponderado for m in metas), 1)
+        from .indicadores import resumen_funcionario
+        resumen = resumen_funcionario(usuario, list(metas))
+        ctx["cumplimiento_total"] = resumen['cumplimiento']
+        ctx['avance_esperado_personal'] = resumen['esperado']
         ctx["actividades"] = Actividad.objects.filter(funcionario=usuario)[:5]
         ctx["pendientes"] = Evidencia.objects.filter(estado=Evidencia.PENDIENTE).count()
         ctx["compromisos"] = Compromiso.objects.exclude(estado=Compromiso.REALIZADO).count()
@@ -323,6 +335,19 @@ class ActividadCreate(LoginRequiredMixin, MensajeMixin, CreateView):
     template_name = "core/actividad_form.html"
     mensaje_exito = "Actividad registrada. Ahora puedes adjuntar la evidencia."
 
+    def get_initial(self):
+        datos = super().get_initial()
+        tarea = Compromiso.objects.filter(pk=self.request.GET.get('tarea'), responsable=self.request.user,
+                                         hito__isnull=False).first() if self.request.GET.get('tarea', '').isdigit() else None
+        if tarea:
+            datos.update(tarea_hito=tarea.pk, hito=tarea.hito_id, origen='INT', solicitud=tarea.descripcion)
+        from .models import AtencionCiudadana
+        atencion = AtencionCiudadana.objects.filter(pk=self.request.GET.get('atencion'), responsable=self.request.user).first() if self.request.GET.get('atencion', '').isdigit() else None
+        if atencion:
+            datos.update(atencion=atencion.pk, vecino=atencion.vecino_id, contacto_nombre=atencion.solicitante,
+                         contacto_telefono=atencion.telefono, solicitud=atencion.descripcion)
+        return datos
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["usuario"] = self.request.user
@@ -364,9 +389,17 @@ class ActividadDelete(LoginRequiredMixin, DeleteView):
         return Actividad.objects.filter(funcionario=self.request.user)
 
     def form_valid(self, form):
+        try:
+            self.get_object().validar_semana()
+        except ValidationError as exc:
+            messages.error(self.request, ' '.join(exc.messages))
+            return redirect('actividad_list')
         if self.get_object().evidencias.filter(estado=Evidencia.APROBADA).exists():
             messages.error(self.request, "No se puede eliminar: la actividad ya tiene evidencia aprobada.")
             return redirect("actividad_list")
+        if ReclamoFelicitacion.objects.filter(actividad=self.get_object()).exists():
+            messages.error(self.request, 'La actividad respalda un registro ciudadano y debe conservarse.')
+            return redirect('actividad_list')
         messages.success(self.request, "Actividad eliminada.")
         return super().form_valid(form)
 
@@ -376,6 +409,13 @@ class ActividadDetalle(LoginRequiredMixin, DetailView):
     template_name = "core/actividad_detalle.html"
     context_object_name = "actividad"
 
+    def get_queryset(self):
+        from .comunidad_forms import alcance
+        qs = alcance(self.request.user, Actividad.objects.all(), 'funcionario__delegacion_id')
+        if self.request.user.tiene_rol(Rol.FUNCIONARIO):
+            qs = qs.filter(funcionario=self.request.user)
+        return qs
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx.setdefault("form_evidencia", EvidenciaForm())
@@ -384,6 +424,13 @@ class ActividadDetalle(LoginRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         """Carga de la evidencia desde el detalle de la actividad (RF-04)."""
         self.object = self.get_object()
+        if self.object.funcionario_id != request.user.pk and not (request.user.es_coordinacion or request.user.is_superuser):
+            raise PermissionDenied
+        try:
+            self.object.validar_semana()
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+            return redirect('actividad_detalle', pk=self.object.pk)
         form = EvidenciaForm(request.POST, request.FILES)
         if form.is_valid():
             evidencia = form.save(commit=False)
@@ -417,6 +464,10 @@ class VerificarEvidencia(RolRequeridoMixin, DetailView):
     roles_permitidos = (Rol.VERIFICADOR, Rol.COORDINADOR, Rol.ADMINISTRADOR)
     template_name = "core/verificacion_detalle.html"
     context_object_name = "evidencia"
+
+    def get_queryset(self):
+        from .comunidad_forms import alcance
+        return alcance(self.request.user, super().get_queryset(), 'actividad__funcionario__delegacion_id')
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -473,6 +524,15 @@ class CompromisoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
     success_url = reverse_lazy("compromiso_list")
     mensaje_exito = "Compromiso registrado en la agenda colectiva."
 
+    def get_initial(self):
+        from .models import Hito
+        from .comunidad_forms import alcance
+        datos = super().get_initial()
+        hito = alcance(self.request.user, Hito.objects.all()).filter(pk=self.request.GET.get('hito')).first() if self.request.GET.get('hito', '').isdigit() else None
+        if hito:
+            datos.update(hito=hito.pk, delegacion=hito.delegacion_id, territorio=hito.territorio, solicitante='Actividad interna municipal')
+        return datos
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["usuario"] = self.request.user
@@ -487,7 +547,13 @@ class CompromisoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
         return respuesta
 
 
-class CompromisoUpdate(LoginRequiredMixin, MensajeMixin, UpdateView):
+class CompromisoAlcanceMixin:
+    def get_queryset(self):
+        from .comunidad_forms import alcance
+        return alcance(self.request.user, super().get_queryset())
+
+
+class CompromisoUpdate(CompromisoAlcanceMixin, LoginRequiredMixin, MensajeMixin, UpdateView):
     model = Compromiso
     form_class = CompromisoForm
     template_name = "core/form.html"
@@ -500,14 +566,20 @@ class CompromisoUpdate(LoginRequiredMixin, MensajeMixin, UpdateView):
         return kwargs
 
 
-class CompromisoDelete(RolRequeridoMixin, DeleteView):
+class CompromisoDelete(CompromisoAlcanceMixin, RolRequeridoMixin, DeleteView):
     model = Compromiso
     roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR, Rol.DELEGADO)
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("compromiso_list")
 
+    def form_valid(self, form):
+        if Actividad.objects.filter(tarea_hito=self.get_object()).exists():
+            messages.error(self.request, 'La tarea tiene una ejecución registrada y debe conservarse.')
+            return redirect('compromiso_list')
+        return super().form_valid(form)
 
-class CompromisoDetalle(LoginRequiredMixin, DetailView):
+
+class CompromisoDetalle(CompromisoAlcanceMixin, LoginRequiredMixin, DetailView):
     model = Compromiso
     template_name = "core/compromiso_detalle.html"
     context_object_name = "compromiso"
@@ -541,7 +613,16 @@ class CompromisoDetalle(LoginRequiredMixin, DetailView):
 
 
 # ---------------------------------------------------- reclamos y felicitaciones
-class ReclamoList(LoginRequiredMixin, ListView):
+class ReclamoAlcanceMixin:
+    def get_queryset(self):
+        from .comunidad_forms import alcance
+        return alcance(self.request.user, super().get_queryset())
+
+    def get_form_kwargs(self):
+        return dict(super().get_form_kwargs(), usuario=self.request.user)
+
+
+class ReclamoList(ReclamoAlcanceMixin, LoginRequiredMixin, ListView):
     model = ReclamoFelicitacion
     template_name = "core/reclamo_list.html"
     context_object_name = "registros"
@@ -553,7 +634,7 @@ class ReclamoList(LoginRequiredMixin, ListView):
         return qs.filter(tipo=tipo) if tipo else qs
 
 
-class ReclamoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
+class ReclamoCreate(ReclamoAlcanceMixin, LoginRequiredMixin, MensajeMixin, CreateView):
     model = ReclamoFelicitacion
     form_class = ReclamoFelicitacionForm
     template_name = "core/form.html"
@@ -572,7 +653,7 @@ class ReclamoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
         return respuesta
 
 
-class ReclamoUpdate(LoginRequiredMixin, MensajeMixin, UpdateView):
+class ReclamoUpdate(ReclamoAlcanceMixin, LoginRequiredMixin, MensajeMixin, UpdateView):
     model = ReclamoFelicitacion
     form_class = ReclamoFelicitacionForm
     template_name = "core/form.html"
@@ -580,7 +661,7 @@ class ReclamoUpdate(LoginRequiredMixin, MensajeMixin, UpdateView):
     mensaje_exito = "Registro actualizado."
 
 
-class ReclamoDelete(RolRequeridoMixin, DeleteView):
+class ReclamoDelete(ReclamoAlcanceMixin, RolRequeridoMixin, DeleteView):
     model = ReclamoFelicitacion
     roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR)
     template_name = "core/confirmar_eliminar.html"
@@ -595,29 +676,24 @@ class IndicadoresView(RolRequeridoMixin, TemplateView):
     template_name = "core/indicadores.html"
 
     def get_context_data(self, **kwargs):
+        from .comunidad_forms import alcance
+        from .indicadores import tablero
         ctx = super().get_context_data(**kwargs)
-        periodo = Periodo.objects.filter(abierto=True).first()
-        esperado = periodo.avance_esperado if periodo else 0
-        filas = []
-        for delegacion in Delegacion.objects.filter(activa=True):
-            metas = MetaFuncionario.objects.filter(funcionario__delegacion=delegacion, periodo=periodo)
-            funcionarios = delegacion.funcionarios.filter(is_active=True).count()
-            cumplimiento = round(sum(m.resultado_ponderado for m in metas) / funcionarios, 1) if funcionarios else 0
-            compromisos = Compromiso.objects.filter(delegacion=delegacion)
-            filas.append({
-                "delegacion": delegacion,
-                "funcionarios": funcionarios,
-                "cumplimiento": cumplimiento,
-                "semaforo": ("verde" if cumplimiento >= esperado
-                             else "ambar" if cumplimiento >= esperado * 0.6 else "rojo"),
-                "compromisos": compromisos.count(),
-                "realizados": compromisos.filter(estado=Compromiso.REALIZADO).count(),
-                "reclamos": delegacion.reclamos.filter(tipo=ReclamoFelicitacion.RECLAMO).count(),
-                "felicitaciones": delegacion.reclamos.filter(tipo=ReclamoFelicitacion.FELICITACION).count(),
-            })
-        ctx["periodo"] = periodo
-        ctx["esperado"] = esperado
-        ctx["filas"] = filas
+        periodo_id = self.request.GET.get('periodo', '')
+        periodo = Periodo.objects.filter(pk=periodo_id).first() if periodo_id.isdigit() else Periodo.objects.filter(abierto=True).first()
+        delegaciones = alcance(self.request.user, Delegacion.objects.filter(activa=True), 'pk')
+        datos = tablero(periodo, delegaciones)
+        ctx.update(datos, periodo=periodo, periodos=Periodo.objects.all())
+        ctx['bajos'] = [p for p in datos['individuales'] if p['semaforo'] in ('rojo', 'ambar')]
+        ctx['items_bajos'] = [dict(d, funcionario=p['funcionario']) for p in datos['individuales']
+                              for d in p['items'] if d['semaforo'] in ('rojo', 'ambar')]
+        ctx['colectivos'] = [('Delegaciones', datos['delegaciones']), ('Equipos por cargo', datos['equipos']),
+                             ('Territorios', datos['territorios'])]
+        # Conserva los contadores operativos del tablero anterior.
+        ctx['operaciones'] = [dict(delegacion=d,
+            compromisos=d.compromisos.count(), realizados=d.compromisos.filter(estado=Compromiso.REALIZADO).count(),
+            reclamos=d.reclamos.filter(tipo=ReclamoFelicitacion.RECLAMO).count(),
+            felicitaciones=d.reclamos.filter(tipo=ReclamoFelicitacion.FELICITACION).count()) for d in delegaciones]
         return ctx
 
 

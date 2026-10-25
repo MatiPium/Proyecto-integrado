@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block titulo %}Ingreso de atención{% endblock %}
 {% block contenido %}
-<section class="panel form-panel"><h2>Nueva atención ciudadana</h2>
+<section class="panel form-panel"><h2>{% if object %}Editar atención ciudadana{% else %}Nueva atención ciudadana{% endif %}</h2>
 <form method="post" id="atencion-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
 <div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
 <p class="form-note small">La delegación y el usuario responsable se registran desde la sesión.</p><div class="form-actions"><a href="{% url 'atencion_list' %}" class="btn btn-secondary">Cancelar</a><button class="btn btn-primary" id="save" type="submit">Guardar atención</button></div></form></section>

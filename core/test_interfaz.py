@@ -16,7 +16,7 @@ class InterfazMunicipalTests(TestCase):
         cls.item = Item.objects.create(nombre="Atención de solicitudes", cargo=cls.cargo, ponderador=40)
         rol = Rol.objects.create(codigo=Rol.COORDINADOR)
         cls.usuario = Funcionario.objects.create_user("coordinacion_ui", rol=rol, delegacion=cls.delegacion)
-        cls.autor = Funcionario.objects.create_user("autor_ui", delegacion=cls.delegacion)
+        cls.autor = Funcionario.objects.create_user("autor_ui", delegacion=cls.delegacion, cargo=cls.cargo)
         cls.periodo = Periodo.objects.create(nombre="Período de prueba", fecha_inicio=date.today() - timedelta(days=1), fecha_termino=date.today() + timedelta(days=30))
         cls.actividad = Actividad.objects.create(funcionario=cls.autor, item=cls.item, fecha=date.today(), solicitud="Solicitud de atención vecinal", accion="Inspección realizada en terreno")
         cls.evidencia = Evidencia.objects.create(actividad=cls.actividad, archivo="evidencias/prueba.png")
