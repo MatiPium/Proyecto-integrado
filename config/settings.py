@@ -26,6 +26,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'clave-desarrollo-local-insegur
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # En desarrollo se permite HTTP; en produccion se requiere HTTPS.
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
