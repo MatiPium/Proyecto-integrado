@@ -10,4 +10,30 @@
     <div class="form-actions"><a class="btn btn-secondary" href="{% url ui_back_route %}">Cancelar</a><button class="btn btn-primary" type="submit">Guardar{% if request.resolver_match.url_name == 'meta_create' %} configuración{% endif %}</button></div>
   </form>
 </section>
+{% if request.resolver_match.url_name == 'reclamo_update' %}
+<section class="panel mt-4">
+  <h2>Historial de estados</h2>
+  <ul>
+    {% for cambio in object.historial.all %}
+      <li>{{ cambio.get_estado_anterior_display|default:"Registro" }} → {{ cambio.get_estado_nuevo_display }} · {{ cambio.autor }} · {{ cambio.fecha|date:"d/m/Y H:i" }}<p>{{ cambio.observacion }}</p></li>
+    {% empty %}<li>Este registro todavía no tiene cambios de estado documentados.</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{{ form.datos_funcionarios|default_if_none:''|json_script:"datos-funcionarios" }}
+{{ form.datos_items|default_if_none:''|json_script:"datos-items" }}
+{{ form.datos_territorios|default_if_none:''|json_script:"datos-territorios" }}
+{{ form.datos_hitos|default_if_none:''|json_script:"datos-hitos" }}
+<script>(()=>{
+  const leer=id=>{try{return JSON.parse(document.getElementById(id).textContent)||{}}catch{return {}}};
+  const funcionarios=leer('datos-funcionarios'),items=leer('datos-items'),territorios=leer('datos-territorios'),hitos=leer('datos-hitos');
+  const funcionario=document.getElementById('id_funcionario'),item=document.getElementById('id_item');
+  if(funcionario&&item){funcionario.addEventListener('change',()=>{const cargo=funcionarios[funcionario.value]?.cargo;[...item.options].forEach(o=>{if(o.value)o.hidden=Boolean(cargo)&&items[o.value]?.cargo!==cargo});if(item.selectedOptions[0]?.hidden)item.value=''});funcionario.dispatchEvent(new Event('change'))}
+  const territorio=document.getElementById('id_territorio_asignado'),delegacion=document.getElementById('id_delegacion');
+  territorio?.addEventListener('change',()=>{const id=territorios[territorio.value]?.delegacion;if(id&&delegacion){delegacion.value=String(id);delegacion.dispatchEvent(new Event('change',{bubbles:true}))}});
+  const hito=document.getElementById('id_hito'),territorioTexto=document.getElementById('id_territorio');
+  hito?.addEventListener('change',()=>{const dato=hitos[hito.value];if(!dato)return;if(dato.delegacion&&delegacion)delegacion.value=String(dato.delegacion);if(dato.territorio&&territorioTexto)territorioTexto.value=dato.territorio});
+})();</script>
 {% endblock %}

@@ -98,6 +98,7 @@ urlpatterns += [
 urlpatterns += [path('funcionarios/excel/',sv.exportar_usuarios,name='usuarios_excel')]
 
 from . import comunidad_views as cv
+urlpatterns += [path('actividades/agregar-vecino/', cv.vecino_desde_actividad, name='actividad_agregar_vecino')]
 for _clave, (_modelo, _form, _nombre, _campo, _activo) in cv.MODULOS.items():
     _base = {'model': _modelo, 'clave': _clave}
     urlpatterns += [
@@ -108,3 +109,20 @@ for _clave, (_modelo, _form, _nombre, _campo, _activo) in cv.MODULOS.items():
         path(f'comunidad/{_clave}/<int:pk>/desactivar/', cv.desactivar, {'clave': _clave}, name=f'{_clave}_disable'),
     ]
 urlpatterns += [path('reclamos/<int:pk>/validar/', cv.validar_felicitacion, name='felicitacion_validar')]
+
+from . import complementarios as cp
+urlpatterns += [
+    path('mantenedores/territorios/', cp.TerritorioList.as_view(), name='territorio_list'),
+    path('mantenedores/territorios/nuevo/', cp.TerritorioCreate.as_view(), name='territorio_create'),
+    path('mantenedores/territorios/<int:pk>/editar/', cp.TerritorioUpdate.as_view(), name='territorio_update'),
+    path('mantenedores/territorios/<int:pk>/desactivar/', cp.territorio_desactivar, name='territorio_disable'),
+    path('cartas/', cp.CartaList.as_view(), name='carta_list'),
+    path('cartas/nueva/', cp.CartaCreate.as_view(), name='carta_create'),
+    path('cartas/<int:pk>/', cp.CartaDetail.as_view(), name='carta_detail'),
+    path('cartas/<int:pk>/editar/', cp.CartaUpdate.as_view(), name='carta_update'),
+    path('revision-actividades/', cp.RevisionActividadList.as_view(), name='revision_actividad_list'),
+    path('revision-actividades/<int:pk>/', cp.RevisionActividadDetail.as_view(), name='revision_actividad_detail'),
+    path('periodos/<int:pk>/estado/', cp.cambiar_estado_trimestre, name='periodo_estado'),
+    path('activar/', cp.activar_cuenta, name='activar_cuenta'),
+    path('reportes/<str:tipo>.xlsx', cp.exportar_reporte, name='exportar_reporte'),
+]

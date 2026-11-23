@@ -8,10 +8,10 @@
 </div>
 
 <div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th>Ítem</th><th>Cargo</th><th>Unidad</th><th>Ponderador</th><th></th></tr></thead>
+  <thead><tr><th>Código</th><th>Ítem</th><th>Cargo</th><th>Unidad</th><th>Ponderador</th><th></th></tr></thead>
   <tbody>
   {% for o in items %}
-    <tr><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.cargo }}</td>
+    <tr><td>{{ o.codigo|default:"—" }}</td><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.cargo }}</td>
       <td>{{ o.unidad }}</td><td>{{ o.ponderador }}%</td>
       <td class="text-end">
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'item_update' o.pk %}">Editar</a>
@@ -19,7 +19,7 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="5" class="empty-state">No hay registros todavía.</td></tr>
+    <tr><td colspan="6" class="empty-state">No hay registros todavía.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>

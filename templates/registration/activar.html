@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block contenido %}<section class="auth-card"><h1>Activar cuenta</h1><form method="post">{% csrf_token %}<label>Correo o usuario</label><input class="form-control" name="identidad" required><label>Código temporal</label><input class="form-control" name="codigo" required><label>Nueva contraseña</label><input class="form-control" type="password" name="password1" required><button class="btn btn-primary mt-3">Activar cuenta</button></form></section>{% endblock %}

@@ -226,8 +226,8 @@ def cambiar_delegacion(request):
 GENERIC='Si el correo está registrado, recibirás instrucciones para recuperar el acceso.'
 def recuperar_solicitar(request):
     if request.method=='POST':
-        correo=request.POST.get('email','').strip()
-        user=Funcionario.objects.filter(email__iexact=correo,is_active=True).first()
+        correo=request.POST.get('identidad', request.POST.get('email','')).strip()
+        user=Funcionario.objects.filter(Q(email__iexact=correo)|Q(username__iexact=correo), is_active=True).first()
         if user:
             anterior=CodigoRecuperacion.objects.filter(usuario=user).first()
             if not anterior or timezone.now()-anterior.creado>=timedelta(seconds=45):
@@ -245,8 +245,8 @@ def recuperar_solicitar(request):
 
 def recuperar_validar(request):
     if request.method=='POST':
-        correo=request.POST.get('email','').strip();codigo=request.POST.get('codigo','').strip()
-        user=Funcionario.objects.filter(email__iexact=correo,is_active=True).first()
+        correo=request.POST.get('identidad', request.POST.get('email','')).strip();codigo=request.POST.get('codigo','').strip()
+        user=Funcionario.objects.filter(Q(email__iexact=correo)|Q(username__iexact=correo), is_active=True).first()
         intento=CodigoRecuperacion.objects.filter(usuario=user,utilizado=False).first() if user else None
         if intento and timezone.now()<intento.vence and intento.intentos<5:
             intento.intentos+=1

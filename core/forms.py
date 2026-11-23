@@ -6,10 +6,10 @@ dependen del usuario que está usando el sistema o de la vista.
 """
 
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.utils import timezone
 
 from .models import (Actividad, Cargo, Compromiso, Delegacion, Evidencia, Funcionario, Item,
-                     MetaFuncionario, Periodo, ReclamoFelicitacion, Validacion)
+                     MetaFuncionario, Periodo, ReclamoFelicitacion, RevisionActividad, Validacion)
 
 
 class BootstrapMixin:
@@ -32,7 +32,7 @@ class BootstrapMixin:
 class DelegacionForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Delegacion
-        fields = ["codigo", "nombre", "direccion", "comuna", "sector", "activa"]
+        fields = ["nombre", "direccion", "comuna", "sector", "activa"]
 
 
 class CargoForm(BootstrapMixin, forms.ModelForm):
@@ -44,25 +44,35 @@ class CargoForm(BootstrapMixin, forms.ModelForm):
 class ItemForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Item
-        fields = ["codigo", "cargo", "nombre", "descripcion", "unidad", "ponderador", "vigente", "puntuable", "tipo_resultado"]
+        fields = ["cargo", "nombre", "descripcion", "vigente", "puntuable", "tipo_resultado"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance._state.adding:
+            self.instance.ponderador = 5
 
 
 class PeriodoForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Periodo
         fields = ["nombre", "fecha_inicio", "fecha_termino", "umbral_verde", "umbral_ambar", "abierto"]
+        help_texts = {
+            'fecha_inicio': 'Inicio del trimestre: 1 de enero, abril, julio u octubre.',
+            'fecha_termino': 'Fin del trimestre: 31 de marzo, 30 de junio, 30 de septiembre o 31 de diciembre.',
+        }
         widgets = {
             "fecha_inicio": forms.DateInput(attrs={"type": "date"}),
             "fecha_termino": forms.DateInput(attrs={"type": "date"}),
         }
 
 
-class FuncionarioForm(BootstrapMixin, UserCreationForm):
-    """Alta de funcionarios: usa el formulario de Django para la contraseña."""
+class FuncionarioForm(BootstrapMixin, forms.ModelForm):
+    """Alta de funcionarios pendiente de activación por correo."""
 
     class Meta:
         model = Funcionario
-        fields = ["username", "first_name", "last_name", "email", "telefono", "territorio", "delegacion", "delegaciones_autorizadas", "cargo", "rol"]
+        fields = ["username", "first_name", "last_name", "rut", "email", "telefono", "territorio_asignado",
+                  "delegacion", "delegaciones_autorizadas", "cargo", "rol", "roles"]
 
     def clean_email(self):
         email = (self.cleaned_data.get("email") or "").strip().lower()
@@ -73,14 +83,25 @@ class FuncionarioForm(BootstrapMixin, UserCreationForm):
             raise forms.ValidationError("Ya existe un funcionario registrado con ese correo.")
         return email
 
+    def save(self, commit=True):
+        usuario = super().save(commit=False)
+        if usuario._state.adding:
+            usuario.set_unusable_password()
+            usuario.is_active = False
+            usuario.debe_cambiar_clave = True
+        if commit:
+            usuario.save()
+            self.save_m2m()
+        return usuario
+
 
 class FuncionarioEditForm(BootstrapMixin, forms.ModelForm):
     """Edición: no toca la contraseña."""
 
     class Meta:
         model = Funcionario
-        fields = ["username", "first_name", "last_name", "email", "telefono", "territorio",
-                  "delegacion", "delegaciones_autorizadas", "cargo", "rol", "is_active"]
+        fields = ["username", "first_name", "last_name", "rut", "email", "telefono", "territorio_asignado",
+                  "delegacion", "delegaciones_autorizadas", "cargo", "rol", "roles", "is_active"]
 
     clean_email = FuncionarioForm.clean_email
 
@@ -90,12 +111,18 @@ class MetaForm(BootstrapMixin, forms.ModelForm):
 
     class Meta:
         model = MetaFuncionario
-        fields = ["funcionario", "item", "periodo", "valor_objetivo"]
+        fields = ["funcionario", "item", "periodo", "valor_objetivo", "ponderacion", "observacion"]
 
     def __init__(self, *args, usuario=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.usuario = usuario
         self.fields["periodo"].queryset = Periodo.objects.filter(abierto=True)
+        self.fields['valor_objetivo'].label = 'Meta cuantitativa'
+        self.fields['ponderacion'].required = False
+        self.fields['periodo'].help_text = 'Selecciona un trimestre calendario completo y abierto.'
+        self.fields['ponderacion'].help_text = 'Peso para este funcionario y trimestre. Si se omite, se usa el peso vigente del ítem.'
+        if usuario:
+            self.instance.definida_por = usuario
 
     def clean(self):
         datos = super().clean()
@@ -103,12 +130,23 @@ class MetaForm(BootstrapMixin, forms.ModelForm):
             raise forms.ValidationError("Tu perfil no puede definir metas. Solicítalo a coordinación.")
         return datos
 
+    @property
+    def datos_funcionarios(self):
+        return {
+            str(f.pk): {'cargo': f.cargo_id, 'delegacion': f.delegacion_id}
+            for f in self.fields['funcionario'].queryset.only('id', 'cargo_id', 'delegacion_id')
+        }
+
+    @property
+    def datos_items(self):
+        return {str(i.pk): {'cargo': i.cargo_id} for i in self.fields['item'].queryset.only('id', 'cargo_id')}
+
     def save(self, commit=True):
         meta = super().save(commit=False)
         if self.usuario:
             meta.definida_por = self.usuario
         if commit:
-            meta.save()
+            meta.guardar_validada()
         return meta
 
 
@@ -117,19 +155,28 @@ class ActividadForm(BootstrapMixin, forms.ModelForm):
 
     class Meta:
         model = Actividad
-        fields = ["fecha", "item", "tipo_atencion", "solicitud", "accion",
+        fields = ["fecha", "meta_asignada", "item", "tipo_atencion", "solicitud", "accion",
                   "clasificacion", "origen", "vecino", "beneficiario_funcionario", "hito", "tarea_hito", "atencion",
-                  "contacto_nombre", "contacto_telefono", "ingresa_agenda"]
+                  "contacto_nombre", "contacto_telefono", "territorio_asignado", "ingresa_agenda",
+                  "fecha_compromiso", "area_apoyo", "avance_tubo"]
         widgets = {
             "fecha": forms.DateInput(attrs={"type": "date"}),
             "solicitud": forms.Textarea(attrs={"rows": 3}),
             "accion": forms.Textarea(attrs={"rows": 3}),
+            "fecha_compromiso": forms.DateInput(attrs={"type": "date"}),
         }
 
     def __init__(self, *args, usuario=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.usuario = usuario
         autor = self.instance.funcionario if self.instance.funcionario_id else usuario
+        from .comunidad_forms import VecinoForm
+        from .comunidad_views import puede_gestionar
+        self.vecino_form = None
+        if usuario and autor and autor.delegacion_id and puede_gestionar(usuario, 'vecino'):
+            self.vecino_form = VecinoForm(usuario=usuario, prefix='nuevo_vecino')
+            self.vecino_form.fields.pop('delegacion')
+            self.vecino_form.fields.pop('activo')
         if autor:
             from .models import Vecino, Hito, AtencionCiudadana
             self.fields['vecino'].queryset = Vecino.objects.filter(delegacion_id=autor.delegacion_id, activo=True)
@@ -137,11 +184,42 @@ class ActividadForm(BootstrapMixin, forms.ModelForm):
             self.fields['hito'].queryset = Hito.objects.filter(delegacion_id=autor.delegacion_id, responsables=autor)
             self.fields['tarea_hito'].queryset = Compromiso.objects.filter(hito__isnull=False, responsable=autor)
             self.fields['atencion'].queryset = AtencionCiudadana.objects.filter(responsable=autor, delegacion_id=autor.delegacion_id)
+            self.fields['meta_asignada'].queryset = MetaFuncionario.objects.filter(
+                funcionario=autor, activa=True, periodo__abierto=True).select_related('item', 'periodo')
+            self.fields['territorio_asignado'].queryset = (autor.delegacion.territorios.filter(activo=True)
+                                                           if autor.delegacion_id else self.fields['territorio_asignado'].queryset.none())
         # Solo se ofrecen los ítems del cargo del funcionario (evita el error antes de que ocurra).
         if autor is not None and autor.cargo_id:
             self.fields["item"].queryset = Item.objects.filter(cargo=autor.cargo, vigente=True)
         else:
             self.fields["item"].queryset = Item.objects.filter(vigente=True)
+
+    @property
+    def contactos_vecinos(self):
+        return {
+            str(vecino.pk): {'nombre': vecino.nombre, 'telefono': vecino.telefono}
+            for vecino in self.fields['vecino'].queryset.only('id', 'nombre', 'telefono')
+        }
+
+    @property
+    def datos_metas(self):
+        return {
+            str(meta.pk): {
+                'item': meta.item_id,
+                'item_nombre': meta.item.nombre,
+                'trimestre': str(meta.periodo),
+                'objetivo': meta.valor_objetivo,
+                'ponderacion': str(meta.ponderacion),
+            }
+            for meta in self.fields['meta_asignada'].queryset
+        }
+
+    @property
+    def datos_hitos(self):
+        return {
+            str(h.pk): {'territorio': h.territorio_asignado_id, 'delegacion': h.delegacion_id}
+            for h in self.fields['hito'].queryset.only('id', 'territorio_asignado_id', 'delegacion_id')
+        }
 
     def save(self, commit=True):
         actividad = super().save(commit=False)
@@ -166,8 +244,23 @@ class EvidenciaForm(BootstrapMixin, forms.ModelForm):
     def clean_archivo(self):
         archivo = self.cleaned_data["archivo"]
         if archivo.size > 10 * 1024 * 1024:
-            raise forms.ValidationError("La fotografía no puede pesar más de 10 MB.")
+            raise forms.ValidationError("El archivo no puede pesar más de 10 MB.")
+        extension = archivo.name.rsplit('.', 1)[-1].lower() if '.' in archivo.name else ''
+        if extension not in {'jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'}:
+            raise forms.ValidationError('Formato no permitido. Usa imagen, PDF, Word o Excel.')
         return archivo
+
+
+class RevisionActividadForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = RevisionActividad
+        fields = ['decision', 'observacion']
+        widgets = {'observacion': forms.Textarea(attrs={'rows': 3})}
+
+    def __init__(self, *args, actividad=None, usuario=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance.actividad = actividad
+        self.instance.verificador = usuario
 
 
 class ValidacionForm(BootstrapMixin, forms.ModelForm):
@@ -195,7 +288,7 @@ class CompromisoForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Compromiso
         fields = ["delegacion", "descripcion", "solicitante", "territorio", "responsable",
-                  "area_apoyo", "fecha_comprometida", "estado", "observacion", "hito"]
+                  "area_apoyo", "fecha_comprometida", "estado", "observacion", "motivo_reasignacion", "hito"]
         widgets = {
             "fecha_comprometida": forms.DateInput(attrs={"type": "date"}),
             "observacion": forms.Textarea(attrs={"rows": 3}),
@@ -215,6 +308,16 @@ class CompromisoForm(BootstrapMixin, forms.ModelForm):
             self.fields["delegacion"].initial = usuario.delegacion_id
             self.fields["responsable"].queryset = Funcionario.objects.filter(
                 delegacion_id=usuario.delegacion_id, is_active=True)
+            if not usuario.tiene_rol(Rol.DELEGADO):
+                self.fields['responsable'].queryset = Funcionario.objects.filter(pk=usuario.pk)
+                self.fields['responsable'].initial = usuario.pk
+
+    @property
+    def datos_hitos(self):
+        return {
+            str(h.pk): {'delegacion': h.delegacion_id, 'territorio': h.territorio}
+            for h in self.fields['hito'].queryset.only('id', 'delegacion_id', 'territorio')
+        }
 
 
 class CambioEstadoForm(BootstrapMixin, forms.Form):
@@ -231,6 +334,11 @@ class CambioEstadoForm(BootstrapMixin, forms.Form):
 
 
 class ReclamoFelicitacionForm(BootstrapMixin, forms.ModelForm):
+    observacion_estado = forms.CharField(
+        label='Observación del cambio de estado', required=False,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        help_text='Obligatoria al cambiar el estado.',
+    )
     class Meta:
         model = ReclamoFelicitacion
         fields = ["tipo", "canal", "delegacion", "funcionario", "vecino", "telefono", "descripcion", "estado",
@@ -239,6 +347,7 @@ class ReclamoFelicitacionForm(BootstrapMixin, forms.ModelForm):
 
     def __init__(self, *args, usuario=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.usuario = usuario
         self.fields['actividad'].queryset = Actividad.objects.filter(clasificacion=Actividad.FELICITACION)
         if usuario and not (usuario.es_coordinacion or usuario.is_superuser):
             self.fields['delegacion'].queryset = Delegacion.objects.filter(pk=usuario.delegacion_id)
@@ -251,12 +360,40 @@ class ReclamoFelicitacionForm(BootstrapMixin, forms.ModelForm):
             raise forms.ValidationError('El respaldo no puede pesar más de 10 MB.')
         return archivo
 
+    def clean(self):
+        datos = super().clean()
+        if self.instance.pk:
+            anterior = ReclamoFelicitacion.objects.get(pk=self.instance.pk).estado
+            if datos.get('estado') != anterior and len(datos.get('observacion_estado', '').strip()) < 5:
+                self.add_error('observacion_estado', 'Describe el cambio con al menos 5 caracteres.')
+        return datos
+
+    def save(self, commit=True):
+        from django.db import transaction
+        from django.db.models import F
+        from .models import HistorialReclamo
+        if not commit:
+            return super().save(commit=False)
+        with transaction.atomic():
+            ReclamoFelicitacion.objects.filter(pk=self.instance.pk).update(estado=F('estado'))
+            anterior = ReclamoFelicitacion.objects.filter(pk=self.instance.pk).values_list('estado', flat=True).first()
+            observacion = self.cleaned_data.get('observacion_estado', '').strip()
+            if anterior and anterior != self.instance.estado and len(observacion) < 5:
+                raise forms.ValidationError('Describe el cambio de estado con al menos 5 caracteres.')
+            carta = super().save()
+            if anterior != carta.estado:
+                HistorialReclamo.objects.create(
+                    carta=carta, estado_anterior=anterior or '', estado_nuevo=carta.estado,
+                    autor=self.usuario, observacion=observacion or 'Registro de la carta.',
+                )
+            return carta
+
 
 from .models import TipoAtencion, SubAtencion, AtencionCiudadana, Rol
 class TipoAtencionForm(BootstrapMixin, forms.ModelForm):
-    class Meta: model = TipoAtencion; fields = ['codigo','nombre','descripcion','activo']
+    class Meta: model = TipoAtencion; fields = ['nombre','descripcion','activo']
 class SubAtencionForm(BootstrapMixin, forms.ModelForm):
-    class Meta: model = SubAtencion; fields = ['codigo','nombre','tipo','activo']
+    class Meta: model = SubAtencion; fields = ['nombre','tipo','activo']
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.fields['tipo'].queryset = TipoAtencion.objects.filter(activo=True) | TipoAtencion.objects.filter(pk=getattr(self.instance,'tipo_id',None))
@@ -265,16 +402,31 @@ class RolForm(BootstrapMixin, forms.ModelForm):
 class AtencionCiudadanaForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = AtencionCiudadana
-        fields = ['solicitante','telefono','contacto','vecino','tipo','subatencion','descripcion']
-        widgets = {'descripcion':forms.Textarea(attrs={'rows':4})}
+        fields = ['solicitante','telefono','contacto','vecino','tipo','subatencion','descripcion',
+                  'fecha_atencion','meta_asignada','visita','ingresa_tubo','primera_gestion',
+                  'fecha_visita_programada','segunda_gestion','fecha_visita','fecha_informe',
+                  'tercera_gestion','fecha_beneficio','derivacion','resultado','observaciones','estado']
+        widgets = {'descripcion':forms.Textarea(attrs={'rows':4}), 'primera_gestion': forms.Textarea(attrs={'rows': 2}),
+                   'segunda_gestion': forms.Textarea(attrs={'rows': 2}), 'tercera_gestion': forms.Textarea(attrs={'rows': 2}),
+                   **{campo: forms.DateInput(attrs={'type': 'date'}) for campo in
+                      ('fecha_atencion','fecha_visita_programada','fecha_visita','fecha_informe','fecha_beneficio')}}
     def __init__(self,*args,usuario=None,delegacion_id=None,**kwargs):
         super().__init__(*args,**kwargs)
+        self.fields['fecha_atencion'].required = False
+        self.fields['fecha_atencion'].initial = timezone.localdate()
+        self.fields['estado'].required = False
+        self.fields['estado'].initial = AtencionCiudadana.INGRESADA if hasattr(AtencionCiudadana, 'INGRESADA') else 'ING'
         self.fields['tipo'].queryset = TipoAtencion.objects.filter(activo=True)
         self.fields['subatencion'].queryset = SubAtencion.objects.filter(activo=True)
         from .models import Vecino
         self.fields['vecino'].queryset = Vecino.objects.filter(activo=True, delegacion_id=delegacion_id or getattr(usuario, 'delegacion_id', None))
+        responsable = self.instance.responsable if self.instance.pk else usuario
+        self.fields['meta_asignada'].queryset = MetaFuncionario.objects.filter(
+            funcionario=responsable, activa=True, periodo__abierto=True) if responsable else MetaFuncionario.objects.none()
     def clean(self):
         d=super().clean();tipo=d.get('tipo');sub=d.get('subatencion')
+        d['fecha_atencion'] = d.get('fecha_atencion') or timezone.localdate()
+        d['estado'] = d.get('estado') or 'ING'
         if tipo and sub and sub.tipo_id != tipo.pk:
             self.add_error('subatencion','La subatención no corresponde al tipo elegido.')
         return d

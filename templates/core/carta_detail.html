@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel"><div class="panel-header"><h2>{{ object.numero }}</h2><a class="btn btn-primary" href="{% url 'carta_update' object.pk %}">Editar / cambiar estado</a></div>
+<dl><dt>Materia</dt><dd>{{ object.materia }}</dd><dt>Remitente</dt><dd>{{ object.remitente }}</dd><dt>Destinatario</dt><dd>{{ object.destinatario }}</dd><dt>Responsable</dt><dd>{{ object.responsable }}</dd><dt>Área derivada</dt><dd>{{ object.area_derivada|default:'—' }}</dd><dt>Estado</dt><dd>{{ object.get_estado_display }}</dd><dt>Pronunciamiento</dt><dd>{{ object.pronunciamiento|default:'—' }}</dd></dl>
+<h3>Documentos</h3><ul>{% for d in object.documentos.all %}<li><a href="{{ d.archivo.url }}">{{ d.archivo.name }}</a> · {{ d.fecha|date:'d/m/Y H:i' }}</li>{% empty %}<li>Sin documentos.</li>{% endfor %}</ul>
+<h3>Historial</h3><ul>{% for h in object.historial.all %}<li>{{ h.get_estado_anterior_display|default:'Registro' }} → {{ h.get_estado_nuevo_display }} · {{ h.autor }} · {{ h.fecha|date:'d/m/Y H:i' }}<p>{{ h.observacion }}</p></li>{% empty %}<li>Sin cambios.</li>{% endfor %}</ul></section>
+{% endblock %}

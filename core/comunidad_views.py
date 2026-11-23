@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -19,6 +20,41 @@ MODULOS = {
     'hito': (Hito, HitoForm, 'Hitos y festividades', 'delegacion_id', None),
     'ausencia': (Ausencia, AusenciaForm, 'Ausencias justificadas', 'funcionario__delegacion_id', 'activa'),
 }
+
+
+@login_required
+@require_POST
+def vecino_desde_actividad(request):
+    from .models import Actividad
+    if not puede_gestionar(request.user, 'vecino'):
+        raise PermissionDenied
+    autor = request.user
+    actividad_id = request.POST.get('actividad_id')
+    if actividad_id:
+        if not actividad_id.isdigit():
+            raise PermissionDenied
+        actividades = Actividad.objects.all()
+        if not request.user.es_coordinacion:
+            actividades = actividades.filter(funcionario=request.user)
+        autor = get_object_or_404(actividades, pk=actividad_id).funcionario
+    if not autor.delegacion_id:
+        return JsonResponse({'errores': ['El funcionario debe tener una delegación asignada.']}, status=400)
+    form = VecinoForm(request.POST, usuario=request.user, prefix='nuevo_vecino')
+    form.fields.pop('delegacion')
+    form.fields.pop('activo')
+    form.instance.delegacion_id = autor.delegacion_id
+    form.instance.activo = True
+    if not form.is_valid():
+        return JsonResponse({'errores': [
+            f'{form.fields[campo].label if campo in form.fields else "Vecino"}: {error}' for campo, errores in form.errors.items()
+            for error in errores
+        ]}, status=400)
+    with transaction.atomic():
+        vecino = form.save()
+        Auditoria.objects.create(funcionario=request.user, evento='GUARDAR', entidad='vecino',
+                                 registro_id=str(vecino.pk), detalle=str(vecino))
+    return JsonResponse({'id': vecino.pk, 'nombre': vecino.nombre, 'telefono': vecino.telefono,
+                         'etiqueta': str(vecino)}, status=201)
 
 
 def puede_gestionar(usuario, clave):

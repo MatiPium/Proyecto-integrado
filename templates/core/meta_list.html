@@ -6,13 +6,14 @@
   <h2 class="h4 mb-0">Metas del período</h2>
   <a class="btn btn-primary ms-auto" href="{% url 'meta_create' %}">+ Nuevo registro</a>
 </div>
+<form class="search-form" method="get"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Código, funcionario o meta"><button class="btn btn-primary">Filtrar</button><a class="btn btn-secondary" href="{% url 'meta_list' %}">Limpiar</a><a class="btn btn-outline-success" href="{% url 'exportar_reporte' 'metas' %}">Exportar Excel</a></form>
 
 <div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th>Funcionario</th><th>Ítem</th><th>Período</th><th>Meta</th><th>Avance</th><th>Cumplimiento</th><th></th></tr></thead>
+  <thead><tr><th>Funcionario</th><th>Ítem</th><th>Trimestre</th><th>Ponderación</th><th>Meta cuantitativa</th><th>Avance</th><th>Cumplimiento</th><th></th></tr></thead>
   <tbody>
   {% for o in metas %}
     <tr><td class="fw-bold">{{ o.funcionario }}</td><td>{{ o.item.nombre }}</td>
-      <td>{{ o.periodo }}</td><td>{{ o.meta_ajustada|floatformat:2 }} <small>(original: {{ o.valor_objetivo }})</small></td><td>{{ o.avance }}</td>
+      <td>{{ o.periodo }}<div class="small">{{ o.periodo.fecha_inicio|date:"d/m/Y" }} – {{ o.periodo.fecha_termino|date:"d/m/Y" }}</div></td><td>{{ o.ponderacion }} %</td><td>{{ o.meta_ajustada|floatformat:2 }} <small>(original: {{ o.valor_objetivo }})</small></td><td>{{ o.avance }}</td>
       <td><span class="badge badge-{{ o.semaforo }}">{{ o.cumplimiento }}%</span></td>
       <td class="text-end">
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'meta_update' o.pk %}">Editar</a>
@@ -20,7 +21,7 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="7" class="empty-state">No hay registros todavía.</td></tr>
+    <tr><td colspan="8" class="empty-state">No hay registros todavía.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>

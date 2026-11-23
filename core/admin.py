@@ -3,9 +3,11 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import (Actividad, Auditoria, Cargo, Compromiso, Delegacion, Evidencia, Funcionario,
-                     HistorialCompromiso, Item, MetaFuncionario, Notificacion, Periodo,
-                     ReclamoFelicitacion, Rol, Validacion)
+from .models import (Actividad, AtencionCiudadana, Auditoria, Cargo, Carta, Compromiso,
+                     CredencialActivacion, Delegacion, DocumentoCarta, Evidencia, Funcionario,
+                     HistorialCarta, HistorialCompromiso, HistorialResponsable, Item,
+                     MetaFuncionario, Notificacion, Periodo, ReclamoFelicitacion,
+                     RevisionActividad, Rol, Territorio, Validacion)
 
 
 @admin.register(Funcionario)
@@ -22,25 +24,30 @@ class FuncionarioAdmin(UserAdmin):
 
 @admin.register(Delegacion)
 class DelegacionAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "sector", "activa")
+    list_display = ("codigo", "nombre", "sector", "activa")
+    readonly_fields = ("codigo",)
     search_fields = ("nombre",)
 
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "cargo", "ponderador", "vigente", "puntuable", "tipo_resultado")
+    list_display = ("codigo", "nombre", "cargo", "ponderador", "vigente", "puntuable", "tipo_resultado")
+    readonly_fields = ("codigo",)
     list_filter = ("cargo", "vigente")
 
 
 @admin.register(MetaFuncionario)
 class MetaAdmin(admin.ModelAdmin):
-    list_display = ("funcionario", "item", "periodo", "valor_objetivo", "definida_por")
+    list_display = ("codigo", "funcionario", "item", "periodo", "valor_objetivo", "ponderacion", "definida_por")
     list_filter = ("periodo", "funcionario__delegacion")
+
+    def save_model(self, request, obj, form, change):
+        obj.guardar_validada()
 
 
 @admin.register(Actividad)
 class ActividadAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "funcionario", "item", "estado_evidencia")
+    list_display = ("codigo", "fecha", "funcionario", "item", "estado_verificacion", "estado_evidencia")
     list_filter = ("item__cargo", "funcionario__delegacion", "fecha")
     search_fields = ("solicitud", "accion")
 
@@ -57,7 +64,7 @@ class EvidenciaAdmin(admin.ModelAdmin):
 
 @admin.register(Compromiso)
 class CompromisoAdmin(admin.ModelAdmin):
-    list_display = ("descripcion", "delegacion", "responsable", "fecha_comprometida", "estado")
+    list_display = ("codigo", "descripcion", "delegacion", "responsable", "fecha_comprometida", "estado")
     list_filter = ("estado", "delegacion")
 
 
@@ -67,6 +74,8 @@ class ReclamoAdmin(admin.ModelAdmin):
     list_filter = ("tipo", "canal", "delegacion", "estado")
 
 
-admin.site.register([Rol, Cargo, Periodo, Validacion, HistorialCompromiso, Notificacion, Auditoria])
+admin.site.register([Rol, Cargo, Periodo, Validacion, HistorialCompromiso, HistorialResponsable,
+                     Notificacion, Auditoria, Territorio, Carta, HistorialCarta, DocumentoCarta,
+                     RevisionActividad, AtencionCiudadana, CredencialActivacion])
 admin.site.site_header = "SGR · Delegaciones Municipales de La Serena"
 admin.site.site_title = "SGR"

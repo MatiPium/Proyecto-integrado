@@ -15,6 +15,7 @@
       <td>{{ o.fecha_termino|date:"d/m/Y" }}</td><td>{{ o.avance_esperado }}%</td>
       <td>{% if o.abierto %}Abierto{% else %}Cerrado{% endif %}</td>
       <td class="text-end">
+        <form method="post" action="{% url 'periodo_estado' o.pk %}" class="d-inline">{% csrf_token %}{% if not o.abierto %}<input name="motivo" placeholder="Motivo de reapertura" required>{% endif %}<button class="btn btn-sm btn-outline-primary">{% if o.abierto %}Cerrar trimestre{% else %}Reabrir{% endif %}</button></form>
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'periodo_update' o.pk %}">Editar</a>
         <a class="btn btn-sm btn-outline-danger" href="{% url 'periodo_delete' o.pk %}">Eliminar</a>
       </td>

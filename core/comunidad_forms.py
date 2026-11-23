@@ -1,5 +1,6 @@
 """Formularios de gestión territorial con selección limitada por delegación."""
 from django import forms
+from django.utils import timezone
 from .forms import BootstrapMixin
 from .models import Ausencia, Delegacion, Funcionario, Hito, Membresia, Organizacion, Vecino
 
@@ -19,28 +20,48 @@ class TerritorialForm(BootstrapMixin, forms.ModelForm):
         if 'delegacion' in self.fields:
             self.fields['delegacion'].queryset = alcance(usuario, Delegacion.objects.filter(activa=True), 'pk')
             self.fields['delegacion'].initial = usuario.delegacion_id
+        if 'territorio_asignado' in self.fields:
+            self.fields['territorio_asignado'].queryset = self.fields['territorio_asignado'].queryset.filter(
+                delegacion__in=alcance(usuario, Delegacion.objects.filter(activa=True), 'pk'), activo=True)
+
+    @property
+    def datos_territorios(self):
+        if 'territorio_asignado' not in self.fields:
+            return {}
+        return {
+            str(t.pk): {'delegacion': t.delegacion_id}
+            for t in self.fields['territorio_asignado'].queryset.only('id', 'delegacion_id')
+        }
 
 
 class VecinoForm(TerritorialForm):
     class Meta:
         model = Vecino
-        fields = ['nombre', 'telefono', 'direccion', 'territorio', 'delegacion', 'activo']
+        fields = ['rut', 'nombre', 'apellidos', 'telefono', 'email', 'direccion', 'territorio_asignado',
+                  'territorio', 'delegacion', 'activo']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['territorio_asignado'].queryset = self.fields['territorio_asignado'].queryset.filter(
+            delegacion__in=self.fields['delegacion'].queryset)
 
 
 class OrganizacionForm(TerritorialForm):
     class Meta:
         model = Organizacion
-        fields = ['nombre', 'tipo', 'domicilio_legal', 'territorio', 'delegacion', 'socios_activos',
+        fields = ['nombre', 'tipo', 'domicilio_legal', 'territorio_asignado', 'territorio', 'delegacion', 'socios_activos',
                   'fecha_constitucion', 'registro_personalidad', 'fecha_inscripcion', 'numero_registro', 'activa']
 
 
 class MembresiaForm(TerritorialForm):
     class Meta:
         model = Membresia
-        fields = ['vecino', 'organizacion', 'rol', 'cargo', 'activa']
+        fields = ['vecino', 'organizacion', 'rol', 'cargo', 'fecha_incorporacion', 'activa']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['fecha_incorporacion'].required = False
+        self.fields['fecha_incorporacion'].initial = timezone.localdate()
         self.fields['vecino'].queryset = alcance(self.usuario, Vecino.objects.filter(activo=True))
         self.fields['organizacion'].queryset = alcance(self.usuario, Organizacion.objects.filter(activa=True))
 
@@ -48,7 +69,7 @@ class MembresiaForm(TerritorialForm):
 class HitoForm(TerritorialForm):
     class Meta:
         model = Hito
-        fields = ['nombre', 'descripcion', 'fecha_inicio', 'fecha_termino', 'territorio', 'delegacion',
+        fields = ['nombre', 'descripcion', 'fecha_inicio', 'fecha_termino', 'territorio_asignado', 'territorio', 'delegacion',
                   'recursos', 'responsables', 'estado', 'recurrente', 'periodicidad']
         widgets = {'descripcion': forms.Textarea(attrs={'rows': 3}), 'recursos': forms.Textarea(attrs={'rows': 3})}
 

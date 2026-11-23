@@ -8,15 +8,17 @@ def interfaz(request):
         ('inicio', 'Inicio', 'inicio', ('inicio',)),
         ('actividades', 'Actividades', 'actividad_list', ('actividad', 'atencion')),
         ('evidencias', 'Evidencias', 'verificacion_list', ('verificacion',)),
+        ('revision', 'Verificación de actividades', 'revision_actividad_list', ('revision',)),
         ('agenda', 'Agenda colectiva', 'compromiso_list', ('compromiso',)),
         ('comunidad', 'Vecinos y organizaciones', 'vecino_list', ('vecino', 'organizacion', 'membresia')),
         ('hitos', 'Hitos y festividades', 'hito_list', ('hito',)),
         ('ausencias', 'Ausencias', 'ausencia_list', ('ausencia',)),
         ('metas', 'Metas e indicadores', 'indicadores', ('indicadores', 'meta', 'periodo')),
         ('reclamos', 'Reclamos / felicitaciones', 'reclamo_list', ('reclamo',)),
+        ('cartas', 'Tubo de cartas', 'carta_list', ('carta',)),
         ('auditoria', 'Auditoría', 'auditoria', ('auditoria',)),
         ('administracion', 'Administración', 'funcionario_list',
-         ('funcionario', 'delegacion', 'delegaciones', 'roles', 'cargo', 'item', 'items', 'tipos', 'subatenciones')),
+         ('funcionario', 'delegacion', 'delegaciones', 'territorio', 'roles', 'cargo', 'item', 'items', 'tipos', 'subatenciones')),
     ]
     active = next((key for key, _, _, sections in groups if section in sections), '')
     if route == 'actividad_detalle':
@@ -36,6 +38,9 @@ def interfaz(request):
         'meta': ('Metas del período', 'Coordinación · configuración por funcionario y período'),
         'periodo': ('Períodos de gestión', 'Configuración de plazos y umbrales de cumplimiento'),
         'reclamo': ('Reclamos y felicitaciones', 'Canal unificado de atención ciudadana'),
+        'carta': ('Tubo de cartas', 'Seguimiento, derivación y cierre de correspondencia'),
+        'revision': ('Verificación de actividades', 'Decisión de validez y ponderación por el verificador'),
+        'territorio': ('Territorios', 'Sectores asociados a cada delegación'),
         'auditoria': ('Registro de auditoría', 'Trazabilidad de operaciones: quién, qué y cuándo'),
         'funcionario': ('Gestión de funcionarios', 'Administración de cuentas, cargos y roles'),
         'delegacion': ('Delegaciones', 'Administración de las delegaciones municipales'),
@@ -58,7 +63,7 @@ def interfaz(request):
     submenus = {
         'comunidad': [('Vecinos', 'vecino_list'), ('Organizaciones', 'organizacion_list'), ('Pertenencias', 'membresia_list')],
         'administracion': [('Funcionarios', 'funcionario_list'), ('Delegaciones', 'delegaciones_list'),
-                           ('Roles', 'roles_list'), ('Cargos', 'cargo_list'), ('Ítems', 'items_list'),
+                           ('Territorios', 'territorio_list'), ('Roles', 'roles_list'), ('Cargos', 'cargo_list'), ('Ítems', 'items_list'),
                            ('Tipos de atención', 'tipos_list'), ('Subatenciones', 'subatenciones_list')],
         'metas': [('Tablero', 'indicadores'), ('Metas', 'meta_list'), ('Períodos', 'periodo_list')],
         'actividades': [('Actividades', 'actividad_list'), ('Atenciones ciudadanas', 'atencion_list')],

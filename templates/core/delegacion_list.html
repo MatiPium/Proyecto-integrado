@@ -10,10 +10,10 @@
   <input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Buscar..."></div>
   <div class="col-auto"><button class="btn btn-outline-secondary">Buscar</button></div></form>
 <div class="table-responsive"><table class="table mb-0">
-  <thead><tr><th>Nombre</th><th>Sector</th><th>Funcionarios</th><th>Estado</th><th></th></tr></thead>
+  <thead><tr><th>Código</th><th>Nombre</th><th>Sector</th><th>Funcionarios</th><th>Estado</th><th></th></tr></thead>
   <tbody>
   {% for o in delegaciones %}
-    <tr><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.sector|default:"—" }}</td>
+    <tr><td>{{ o.codigo|default:"—" }}</td><td class="fw-bold">{{ o.nombre }}</td><td>{{ o.sector|default:"—" }}</td>
       <td>{{ o.total }}</td><td>{% if o.activa %}<span class="badge bg-success">Activa</span>{% else %}<span class="badge bg-secondary">Inactiva</span>{% endif %}</td>
       <td class="text-end">
         <a class="btn btn-sm btn-outline-secondary" href="{% url 'delegacion_update' o.pk %}">Editar</a>
@@ -21,7 +21,7 @@
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="5" class="empty-state">No hay registros todavía.</td></tr>
+    <tr><td colspan="6" class="empty-state">No hay registros todavía.</td></tr>
   {% endfor %}
   </tbody>
 </table></div>

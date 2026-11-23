@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel"><h2>{{ object.codigo }} · {{ object.funcionario }}</h2><p>{{ object.solicitud }}</p><p><strong>Acción</strong> {{ object.accion }}</p><p><strong>Meta</strong> {{ object.meta_asignada|default:object.item }}</p><h3>Evidencias</h3><ul>{% for e in object.evidencias.all %}<li><a href="{{ e.archivo.url }}">{{ e.codigo }}</a></li>{% empty %}<li>Sin evidencia.</li>{% endfor %}</ul>
+<form method="post">{% csrf_token %}{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}<button class="btn btn-primary">Guardar decisión</button></form>
+<h3 class="mt-4">Revisiones</h3><ul>{% for r in object.revisiones.all %}<li>{{ r.get_decision_display }} · {{ r.verificador }} · {{ r.fecha|date:'d/m/Y H:i' }}<p>{{ r.observacion }}</p></li>{% empty %}<li>Sin revisiones anteriores.</li>{% endfor %}</ul></section>
+{% endblock %}

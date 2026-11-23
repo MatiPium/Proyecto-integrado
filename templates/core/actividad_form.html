@@ -5,9 +5,99 @@
   <h2>{% if object %}Editar actividad{% else %}Nueva actividad{% endif %}</h2>
   {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
   <form method="post" novalidate>{% csrf_token %}
-    <div class="form-grid">{% for campo in form %}{% include 'core/_campo.html' %}{% endfor %}</div>
+    <div class="form-grid">
+      {% for campo in form %}
+        {% if campo.name == 'vecino' and form.vecino_form %}
+          <div>{% include 'core/_campo.html' %}<button type="button" id="agregar-vecino" class="btn btn-outline-primary btn-sm mt-2">+ Agregar vecino</button></div>
+        {% else %}
+          {% include 'core/_campo.html' %}
+        {% endif %}
+      {% endfor %}
+    </div>
     <p class="form-note small">Para puntuar se requiere nombre, teléfono, una ejecución válida del catálogo y evidencia aprobada (o felicitación validada por el delegado). Coordinaciones y otras gestiones se conservan sin puntaje. Máximo: siete actividades puntuables al día. El registro semanal cierra el martes siguiente.</p>
     <div class="form-actions"><a class="btn btn-secondary" href="{% url 'actividad_list' %}">Cancelar</a><button class="btn btn-primary" type="submit">Guardar actividad</button></div>
   </form>
 </section>
+{% if form.vecino_form %}
+<dialog id="dialogo-vecino" class="panel form-panel" aria-labelledby="titulo-vecino">
+  <h2 id="titulo-vecino">Agregar vecino</h2>
+  <form id="form-nuevo-vecino" action="{% url 'actividad_agregar_vecino' %}" method="post">
+    {% csrf_token %}
+    {% if object %}<input type="hidden" name="actividad_id" value="{{ object.pk }}">{% endif %}
+    <div id="errores-vecino" class="field-errors" role="alert"></div>
+    <div class="form-grid">{% for campo in form.vecino_form %}{% include 'core/_campo.html' %}{% endfor %}</div>
+    <div class="form-actions"><button type="button" id="cancelar-vecino" class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Guardar vecino</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{{ form.contactos_vecinos|json_script:"contactos-vecinos" }}
+{{ form.datos_metas|json_script:"datos-metas" }}
+{{ form.datos_hitos|json_script:"datos-hitos" }}
+<script>
+(() => {
+  const selector = document.getElementById('id_vecino');
+  const contactos = JSON.parse(document.getElementById('contactos-vecinos').textContent);
+  const nombre = document.getElementById('id_contacto_nombre');
+  const telefono = document.getElementById('id_contacto_telefono');
+  selector.addEventListener('change', () => {
+    const contacto = contactos[selector.value];
+    nombre.value = contacto?.nombre || '';
+    telefono.value = contacto?.telefono || '';
+  });
+  const inicial = contactos[selector.value];
+  if (inicial) {
+    if (!nombre.value.trim()) nombre.value = inicial.nombre;
+    if (!telefono.value.trim()) telefono.value = inicial.telefono;
+  }
+  const selectorMeta = document.getElementById('id_meta_asignada');
+  const selectorItem = document.getElementById('id_item');
+  const metas = JSON.parse(document.getElementById('datos-metas').textContent);
+  selectorMeta?.addEventListener('change', () => {
+    const meta = metas[selectorMeta.value];
+    if (meta && selectorItem) {
+      selectorItem.value = String(meta.item);
+      selectorItem.dispatchEvent(new Event('change', {bubbles: true}));
+      selectorItem.title = `Meta ${meta.objetivo} · ${meta.ponderacion}% · ${meta.trimestre}`;
+    }
+  });
+  const selectorHito = document.getElementById('id_hito');
+  const selectorTerritorio = document.getElementById('id_territorio_asignado');
+  const hitos = JSON.parse(document.getElementById('datos-hitos').textContent);
+  selectorHito?.addEventListener('change', () => {
+    const hito = hitos[selectorHito.value];
+    if (hito?.territorio && selectorTerritorio) selectorTerritorio.value = String(hito.territorio);
+  });
+  const dialogo = document.getElementById('dialogo-vecino');
+  if (!dialogo) return;
+  const formulario = document.getElementById('form-nuevo-vecino');
+  const errores = document.getElementById('errores-vecino');
+  document.getElementById('agregar-vecino').addEventListener('click', () => dialogo.showModal());
+  document.getElementById('cancelar-vecino').addEventListener('click', () => dialogo.close());
+  formulario.addEventListener('submit', async event => {
+    event.preventDefault();
+    const guardar = formulario.querySelector('[type="submit"]');
+    guardar.disabled = true;
+    errores.textContent = '';
+    try {
+      const respuesta = await fetch(formulario.action, {method: 'POST', body: new FormData(formulario)});
+      const datos = await respuesta.json();
+      if (!respuesta.ok) {
+        errores.textContent = (datos.errores || ['No se pudo guardar el vecino.']).join(' ');
+        return;
+      }
+      contactos[String(datos.id)] = {nombre: datos.nombre, telefono: datos.telefono};
+      selector.add(new Option(datos.etiqueta, datos.id, true, true));
+      selector.dispatchEvent(new Event('change', {bubbles: true}));
+      formulario.reset();
+      dialogo.close();
+    } catch (error) {
+      errores.textContent = 'No se pudo confirmar el guardado. Revisa tu conexión y vuelve a intentarlo.';
+    } finally {
+      guardar.disabled = false;
+    }
+  });
+})();
+</script>
 {% endblock %}

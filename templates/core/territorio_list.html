@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel"><div class="panel-header"><h2>Territorios</h2><a class="btn btn-primary" href="{% url 'territorio_create' %}">+ Nuevo territorio</a></div>
+<form method="get" class="search-form"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Código, nombre o delegación"><button class="btn btn-primary">Buscar</button>{% if request.GET.q %}<a class="btn btn-secondary" href="{% url 'territorio_list' %}">Limpiar</a>{% endif %}</form>
+<div class="table-responsive"><table class="table"><thead><tr><th>Código</th><th>Nombre</th><th>Delegación</th><th>Estado</th><th></th></tr></thead><tbody>
+{% for o in object_list %}<tr><td>{{ o.codigo }}</td><td>{{ o.nombre }}</td><td>{{ o.delegacion }}</td><td>{{ o.activo|yesno:'Activo,Inactivo' }}</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'territorio_update' o.pk %}">Editar</a>{% if o.activo %}<form class="d-inline" method="post" action="{% url 'territorio_disable' o.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Desactivar</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5">No hay territorios.</td></tr>{% endfor %}</tbody></table></div>{% include 'core/_paginacion.html' %}</section>
+{% endblock %}

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}Mi tablero{% endblock %}
 {% block contenido %}
+{% if puede_supervisar %}<form method="get" class="search-form"><select name="funcionario" class="form-select"><option value="">Mi información</option>{% for f in funcionarios_filtro %}<option value="{{ f.pk }}"{% if funcionario_objetivo.pk == f.pk %} selected{% endif %}>{{ f }} · {{ f.delegacion|default:'Sin delegación' }}</option>{% endfor %}</select><select name="periodo" class="form-select">{% for p in periodos_filtro %}<option value="{{ p.pk }}"{% if periodo.pk == p.pk %} selected{% endif %}>{{ p }}{% if not p.abierto %} · cerrado{% endif %}</option>{% endfor %}</select><button class="btn btn-primary">Aplicar filtros</button></form>{% endif %}
+<p class="small text-muted">Datos de {{ funcionario_objetivo }} · última actualización {{ ultima_actualizacion|date:'d/m/Y H:i' }}</p>
 <p class="welcome-line"><strong>Hola, {{ user.first_name|default:user.username }}.</strong> {{ user.cargo|default:'Sin cargo' }} · {{ user.delegacion|default:'Sin delegación' }}{% if periodo %} · {{ periodo }}{% endif %}</p>
 <div class="summary-grid">
   <div class="card stat-card"><div class="stat-label">Cumplimiento ponderado</div><div class="stat-number">{{ cumplimiento_total|default_if_none:'Sin meta' }}{% if cumplimiento_total != None %} %{% endif %}</div></div>
@@ -9,7 +11,7 @@
 </div>
 <section class="panel mb-4"><div class="panel-header"><h2>Cumplimiento por ítem de gestión</h2></div>
 <div class="table-responsive"><table class="table"><thead><tr><th>Ítem</th><th>Ponderador</th><th>Meta</th><th>Avance</th><th>Cumplimiento</th><th>Semáforo</th></tr></thead><tbody>
-  {% for m in metas %}<tr><td>{{ m.item.nombre }}</td><td>{{ m.item.ponderador }} %</td><td>{{ m.meta_ajustada|floatformat:2 }} (original: {{ m.valor_objetivo }})</td><td>{{ m.avance }}</td><td class="fw-semibold">{{ m.cumplimiento }} %</td><td><span class="badge badge-{{ m.semaforo }}">{% if m.semaforo == 'sin_meta' %}Sin meta evaluable{% else %}{{ m.semaforo|capfirst }}{% endif %}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">Aún no tienes metas definidas para el período.</td></tr>{% endfor %}
+  {% for m in metas %}<tr><td>{{ m.item.nombre }}</td><td>{{ m.ponderacion }} %</td><td>{{ m.meta_ajustada|floatformat:2 }} (original: {{ m.valor_objetivo }})</td><td>{{ m.avance }}</td><td class="fw-semibold">{{ m.cumplimiento }} %</td><td><span class="badge badge-{{ m.semaforo }}">{% if m.semaforo == 'sin_meta' %}Sin meta evaluable{% else %}{{ m.semaforo|capfirst }}{% endif %}</span></td></tr>{% empty %}<tr><td colspan="6" class="empty-state">Aún no tienes metas definidas para el período.</td></tr>{% endfor %}
 </tbody></table></div><p class="panel-note">Avance esperado personal al día de hoy: {{ avance_esperado_personal|default_if_none:'Sin meta evaluable' }}. Se consideran ausencias y feriados. Solo las ejecuciones válidas con evidencia aprobada o felicitación validada suman al avance.</p></section>
 <section class="panel"><div class="panel-header"><h2>Últimas actividades</h2><a class="btn btn-primary" href="{% url 'actividad_create' %}">+ Registrar actividad</a></div>
 <div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Ítem</th><th>Solicitud</th><th>Evidencia</th><th class="text-end">Detalle</th></tr></thead><tbody>

@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block contenido %}
+<section class="panel"><div class="panel-header"><h2>Actividades por verificar</h2><a class="btn btn-outline-success" href="{% url 'exportar_reporte' 'actividades' %}">Exportar Excel</a></div>
+<form method="get" class="search-form"><select class="form-select" name="estado"><option value="PEN">Pendientes</option><option value="ANT">Solicitud de antecedentes</option><option value="">Todas las revisadas</option></select><button class="btn btn-primary">Filtrar</button></form>
+<div class="table-responsive"><table class="table"><thead><tr><th>Código</th><th>Fecha</th><th>Funcionario</th><th>Meta</th><th>Estado</th><th></th></tr></thead><tbody>{% for o in object_list %}<tr><td>{{ o.codigo }}</td><td>{{ o.fecha|date:'d/m/Y' }}</td><td>{{ o.funcionario }}</td><td>{{ o.meta_asignada|default:o.item }}</td><td>{{ o.get_estado_verificacion_display }}</td><td><a class="btn btn-sm btn-primary" href="{% url 'revision_actividad_detail' o.pk %}">Revisar</a></td></tr>{% empty %}<tr><td colspan="6">No hay actividades en este estado.</td></tr>{% endfor %}</tbody></table></div>{% include 'core/_paginacion.html' %}</section>
+{% endblock %}

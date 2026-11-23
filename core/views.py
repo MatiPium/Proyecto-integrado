@@ -13,6 +13,7 @@ from django.db import transaction
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView
 
 from .forms import (ActividadForm, CambioEstadoForm, CargoForm, CompromisoForm, DelegacionForm,
@@ -80,17 +81,39 @@ class InicioView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         usuario = self.request.user
-        periodo = Periodo.objects.filter(abierto=True).first()
-        metas = MetaFuncionario.objects.filter(funcionario=usuario, periodo=periodo) if periodo else []
+        puede_supervisar = usuario.is_superuser or usuario.tiene_rol(
+            Rol.ADMINISTRADOR, Rol.COORDINADOR, Rol.DELEGADO, Rol.VERIFICADOR)
+        periodos = Periodo.objects.all()
+        periodo_id = self.request.GET.get('periodo', '')
+        periodo = periodos.filter(pk=periodo_id).first() if periodo_id.isdigit() else periodos.filter(abierto=True).first()
+        funcionarios = Funcionario.objects.filter(is_active=True).select_related('delegacion', 'cargo')
+        if not (usuario.is_superuser or usuario.es_coordinacion):
+            funcionarios = funcionarios.filter(delegacion_id=usuario.delegacion_id)
+        funcionario_id = self.request.GET.get('funcionario', '')
+        objetivo = funcionarios.filter(pk=funcionario_id).first() if puede_supervisar and funcionario_id.isdigit() else usuario
+        objetivo = objetivo or usuario
+        metas = MetaFuncionario.objects.filter(funcionario=objetivo, periodo=periodo, activa=True).select_related(
+            'item', 'periodo') if periodo else MetaFuncionario.objects.none()
         ctx["periodo"] = periodo
         ctx["metas"] = metas
         from .indicadores import resumen_funcionario
-        resumen = resumen_funcionario(usuario, list(metas))
+        resumen = resumen_funcionario(objetivo, list(metas))
         ctx["cumplimiento_total"] = resumen['cumplimiento']
         ctx['avance_esperado_personal'] = resumen['esperado']
-        ctx["actividades"] = Actividad.objects.filter(funcionario=usuario)[:5]
-        ctx["pendientes"] = Evidencia.objects.filter(estado=Evidencia.PENDIENTE).count()
-        ctx["compromisos"] = Compromiso.objects.exclude(estado=Compromiso.REALIZADO).count()
+        ctx["actividades"] = Actividad.objects.filter(funcionario=objetivo).select_related('item')[:5]
+        evidencias = Evidencia.objects.filter(estado=Evidencia.PENDIENTE)
+        if not (usuario.is_superuser or usuario.es_coordinacion):
+            evidencias = evidencias.filter(actividad__funcionario__delegacion_id=usuario.delegacion_id)
+        ctx["pendientes"] = evidencias.count()
+        compromisos = Compromiso.objects.exclude(estado__in=(Compromiso.REALIZADO, Compromiso.CERRADO, Compromiso.NO_APLICA))
+        if not (usuario.is_superuser or usuario.es_coordinacion):
+            compromisos = compromisos.filter(delegacion_id=usuario.delegacion_id)
+        ctx["compromisos"] = compromisos.count()
+        ctx['funcionario_objetivo'] = objetivo
+        ctx['funcionarios_filtro'] = funcionarios if puede_supervisar else Funcionario.objects.none()
+        ctx['periodos_filtro'] = periodos
+        ctx['puede_supervisar'] = puede_supervisar
+        ctx['ultima_actualizacion'] = timezone.localtime()
         return ctx
 
 
@@ -202,6 +225,15 @@ class ItemDelete(RolRequeridoMixin, DeleteView):
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("item_list")
 
+    def form_valid(self, form):
+        item = self.get_object()
+        if item.metas.exists() or item.actividades.exists():
+            item.vigente = False
+            item.save(update_fields=['vigente'])
+            messages.info(self.request, 'El ítem fue desactivado y se conservaron sus resultados históricos.')
+            return redirect('item_list')
+        return super().form_valid(form)
+
 
 # --------------------------------------------------------------------- períodos
 class PeriodoList(LoginRequiredMixin, ListView):
@@ -230,6 +262,12 @@ class PeriodoDelete(RolRequeridoMixin, DeleteView):
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("periodo_list")
 
+    def form_valid(self, form):
+        if self.get_object().metas.exists():
+            messages.error(self.request, 'No se puede eliminar un trimestre que contiene metas o resultados.')
+            return redirect('periodo_list')
+        return super().form_valid(form)
+
 
 # ----------------------------------------------------------------- funcionarios
 class FuncionarioList(RolRequeridoMixin, ListView):
@@ -254,6 +292,18 @@ class FuncionarioCreate(AdminCRUD, CreateView):
     success_url = reverse_lazy("funcionario_list")
     mensaje_exito = "Funcionario creado correctamente."
 
+    def form_valid(self, form):
+        from .complementarios import enviar_credencial_activacion
+        try:
+            with transaction.atomic():
+                respuesta = super().form_valid(form)
+                enviar_credencial_activacion(self.object)
+        except Exception:
+            form.add_error(None, 'No fue posible enviar la credencial de activación. Revisa la configuración de correo.')
+            return self.form_invalid(form)
+        messages.success(self.request, 'Cuenta creada. La credencial temporal fue enviada al correo institucional.')
+        return respuesta
+
 
 class FuncionarioUpdate(AdminCRUD, UpdateView):
     model = Funcionario
@@ -268,6 +318,15 @@ class FuncionarioDelete(RolRequeridoMixin, DeleteView):
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("funcionario_list")
 
+    def form_valid(self, form):
+        funcionario = self.get_object()
+        if funcionario.metas.exists() or funcionario.actividades.exists():
+            funcionario.is_active = False
+            funcionario.save(update_fields=['is_active'])
+            messages.info(self.request, 'El funcionario fue desactivado; su historial permanece disponible.')
+            return redirect('funcionario_list')
+        return super().form_valid(form)
+
 
 # ------------------------------------------------------------------------ metas
 class MetaList(RolRequeridoMixin, ListView):
@@ -277,7 +336,16 @@ class MetaList(RolRequeridoMixin, ListView):
     context_object_name = "metas"
 
     def get_queryset(self):
-        return super().get_queryset().select_related("funcionario", "item", "periodo")
+        qs = super().get_queryset().select_related("funcionario", "item", "periodo")
+        q, periodo, funcionario = (self.request.GET.get(k, '').strip() for k in ('q', 'periodo', 'funcionario'))
+        if q:
+            qs = qs.filter(Q(codigo__icontains=q) | Q(item__nombre__icontains=q) |
+                           Q(funcionario__first_name__icontains=q) | Q(funcionario__last_name__icontains=q))
+        if periodo.isdigit():
+            qs = qs.filter(periodo_id=periodo)
+        if funcionario.isdigit():
+            qs = qs.filter(funcionario_id=funcionario)
+        return qs
 
 
 class MetaCreate(AdminCRUD, CreateView):
@@ -309,6 +377,18 @@ class MetaDelete(RolRequeridoMixin, DeleteView):
     roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR)
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("meta_list")
+
+    def form_valid(self, form):
+        meta = self.get_object()
+        if not meta.periodo.abierto:
+            messages.error(self.request, 'No se puede modificar una asignación de un trimestre cerrado.')
+            return redirect('meta_list')
+        meta.activa = False
+        meta.save(update_fields=['activa'])
+        Auditoria.objects.create(funcionario=self.request.user, evento='DESACTIVAR', entidad='meta asignada',
+                                 registro_id=str(meta.pk), detalle=str(meta))
+        messages.success(self.request, 'Asignación desactivada y conservada para trazabilidad.')
+        return redirect('meta_list')
 
 
 # ------------------------------------------------------------------ actividades
@@ -353,6 +433,23 @@ class ActividadCreate(LoginRequiredMixin, MensajeMixin, CreateView):
         kwargs["usuario"] = self.request.user
         return kwargs
 
+    def form_valid(self, form):
+        form.instance.estado_verificacion = Actividad.VER_PENDIENTE
+        respuesta = super().form_valid(form)
+        if self.object.ingresa_agenda:
+            Compromiso.objects.get_or_create(
+                actividad=self.object,
+                defaults={'delegacion': self.object.funcionario.delegacion,
+                          'responsable': self.object.funcionario,
+                          'descripcion': self.object.solicitud[:250],
+                          'solicitante': self.object.contacto_nombre,
+                          'territorio': str(self.object.territorio_asignado or ''),
+                          'area_apoyo': self.object.area_apoyo,
+                          'fecha_comprometida': self.object.fecha_compromiso,
+                          'observacion': self.object.avance_tubo},
+            )
+        return respuesta
+
     def get_success_url(self):
         return reverse_lazy("actividad_detalle", kwargs={"pk": self.object.pk})
 
@@ -374,6 +471,11 @@ class ActividadUpdate(LoginRequiredMixin, MensajeMixin, UpdateView):
             return Actividad.objects.all()
         return Actividad.objects.filter(funcionario=self.request.user)
 
+    def form_valid(self, form):
+        if self.get_object().estado_verificacion == Actividad.VER_ANTECEDENTES:
+            form.instance.estado_verificacion = Actividad.VER_PENDIENTE
+        return super().form_valid(form)
+
     def get_success_url(self):
         return reverse_lazy("actividad_detalle", kwargs={"pk": self.object.pk})
 
@@ -393,6 +495,9 @@ class ActividadDelete(LoginRequiredMixin, DeleteView):
             self.get_object().validar_semana()
         except ValidationError as exc:
             messages.error(self.request, ' '.join(exc.messages))
+            return redirect('actividad_list')
+        if self.get_object().estado_verificacion in (Actividad.VER_PONDERA, Actividad.VER_NO_PONDERA):
+            messages.error(self.request, 'Una actividad aprobada se conserva para trazabilidad.')
             return redirect('actividad_list')
         if self.get_object().evidencias.filter(estado=Evidencia.APROBADA).exists():
             messages.error(self.request, "No se puede eliminar: la actividad ya tiene evidencia aprobada.")
@@ -435,7 +540,10 @@ class ActividadDetalle(LoginRequiredMixin, DetailView):
         if form.is_valid():
             evidencia = form.save(commit=False)
             evidencia.actividad = self.object
+            evidencia.autor = request.user
             evidencia.save()
+            if self.object.estado_verificacion == Actividad.VER_ANTECEDENTES:
+                Actividad.objects.filter(pk=self.object.pk).update(estado_verificacion=Actividad.VER_PENDIENTE)
             messages.success(request, f"Evidencia {evidencia.codigo} cargada. Queda pendiente de verificación.")
             return redirect("actividad_detalle", pk=self.object.pk)
         return self.render_to_response(self.get_context_data(form_evidencia=form))
@@ -498,6 +606,7 @@ class CompromisoList(LoginRequiredMixin, ListView):
     model = Compromiso
     template_name = "core/compromiso_list.html"
     context_object_name = "compromisos"
+    paginate_by = 20
 
     def get_queryset(self):
         qs = Compromiso.objects.select_related("delegacion", "responsable")
@@ -505,7 +614,23 @@ class CompromisoList(LoginRequiredMixin, ListView):
         if not usuario.es_coordinacion and usuario.delegacion_id:
             qs = qs.filter(delegacion_id=usuario.delegacion_id)
         estado = self.request.GET.get("estado")
-        return qs.filter(estado=estado) if estado else qs
+        responsable = self.request.GET.get('responsable', '')
+        desde, hasta = self.request.GET.get('desde', ''), self.request.GET.get('hasta', '')
+        q = self.request.GET.get('q', '').strip()
+        if estado:
+            qs = qs.filter(estado=estado)
+        if responsable.isdigit():
+            qs = qs.filter(responsable_id=responsable)
+        if desde:
+            qs = qs.filter(fecha_comprometida__gte=desde)
+        if hasta:
+            qs = qs.filter(fecha_comprometida__lte=hasta)
+        if q:
+            qs = qs.filter(Q(codigo__icontains=q) | Q(solicitante__icontains=q) |
+                           Q(descripcion__icontains=q) | Q(territorio__icontains=q) |
+                           Q(actividad__vecino__rut__icontains=q) |
+                           Q(actividad__contacto_nombre__icontains=q))
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -514,10 +639,26 @@ class CompromisoList(LoginRequiredMixin, ListView):
             (etiqueta, [c for c in ctx["compromisos"] if c.estado == codigo])
             for codigo, etiqueta in Compromiso.ESTADOS
         ]
+        ctx['estados'] = Compromiso.ESTADOS
+        ctx['responsables'] = Funcionario.objects.filter(
+            delegacion_id=self.request.user.delegacion_id, is_active=True) if not self.request.user.es_coordinacion else Funcionario.objects.filter(is_active=True)
+        ctx['total_resultados'] = self.get_queryset().count()
         return ctx
 
 
-class CompromisoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
+class CompromisoGuardarMixin:
+    def form_valid(self, form):
+        self.object = form.save(commit=False)
+        try:
+            self.object.guardar_con_historial(self.request.user)
+        except ValidationError as exc:
+            form.add_error(None, ' '.join(exc.messages))
+            return self.form_invalid(form)
+        messages.success(self.request, self.mensaje_exito)
+        return redirect(self.get_success_url())
+
+
+class CompromisoCreate(LoginRequiredMixin, CompromisoGuardarMixin, CreateView):
     model = Compromiso
     form_class = CompromisoForm
     template_name = "core/form.html"
@@ -538,22 +679,18 @@ class CompromisoCreate(LoginRequiredMixin, MensajeMixin, CreateView):
         kwargs["usuario"] = self.request.user
         return kwargs
 
-    def form_valid(self, form):
-        respuesta = super().form_valid(form)
-        HistorialCompromiso.objects.create(
-            compromiso=self.object, estado_anterior="", estado_nuevo=self.object.estado,
-            autor=self.request.user, observacion="Creación del compromiso.",
-        )
-        return respuesta
-
-
 class CompromisoAlcanceMixin:
     def get_queryset(self):
         from .comunidad_forms import alcance
-        return alcance(self.request.user, super().get_queryset())
+        qs = alcance(self.request.user, super().get_queryset())
+        if getattr(self, 'solo_editables', False) and not (
+                self.request.user.is_superuser or self.request.user.es_coordinacion or self.request.user.tiene_rol(Rol.DELEGADO)):
+            qs = qs.filter(responsable=self.request.user)
+        return qs
 
 
-class CompromisoUpdate(CompromisoAlcanceMixin, LoginRequiredMixin, MensajeMixin, UpdateView):
+class CompromisoUpdate(CompromisoAlcanceMixin, LoginRequiredMixin, CompromisoGuardarMixin, UpdateView):
+    solo_editables = True
     model = Compromiso
     form_class = CompromisoForm
     template_name = "core/form.html"
@@ -576,7 +713,12 @@ class CompromisoDelete(CompromisoAlcanceMixin, RolRequeridoMixin, DeleteView):
         if Actividad.objects.filter(tarea_hito=self.get_object()).exists():
             messages.error(self.request, 'La tarea tiene una ejecución registrada y debe conservarse.')
             return redirect('compromiso_list')
-        return super().form_valid(form)
+        compromiso = self.get_object()
+        compromiso.estado = Compromiso.NO_APLICA
+        compromiso.observacion = 'Anulado desde la administración del Tubo.'
+        compromiso.guardar_con_historial(self.request.user)
+        messages.success(self.request, 'Registro marcado como No aplica y conservado en el historial.')
+        return redirect('compromiso_list')
 
 
 class CompromisoDetalle(CompromisoAlcanceMixin, LoginRequiredMixin, DetailView):
@@ -593,6 +735,9 @@ class CompromisoDetalle(CompromisoAlcanceMixin, LoginRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         """Cambio de estado con historial (RF-09)."""
         self.object = self.get_object()
+        if not (request.user.is_superuser or request.user.es_coordinacion or request.user.tiene_rol(Rol.DELEGADO)
+                or self.object.responsable_id == request.user.pk):
+            raise PermissionDenied
         form = CambioEstadoForm(request.POST)
         if form.is_valid():
             anterior = self.object.estado
@@ -602,11 +747,11 @@ class CompromisoDetalle(CompromisoAlcanceMixin, LoginRequiredMixin, DetailView):
                 return redirect("compromiso_detalle", pk=self.object.pk)
             self.object.estado = nuevo
             self.object.observacion = form.cleaned_data["observacion"]
-            self.object.save()
-            HistorialCompromiso.objects.create(
-                compromiso=self.object, estado_anterior=anterior, estado_nuevo=nuevo,
-                autor=request.user, observacion=form.cleaned_data["observacion"],
-            )
+            try:
+                self.object.guardar_con_historial(request.user)
+            except ValidationError as exc:
+                form.add_error(None, ' '.join(exc.messages))
+                return self.render_to_response(self.get_context_data(form=form))
             messages.success(request, "Estado actualizado y registrado en el historial.")
             return redirect("compromiso_detalle", pk=self.object.pk)
         return self.render_to_response(self.get_context_data(form=form))
@@ -644,7 +789,7 @@ class ReclamoCreate(ReclamoAlcanceMixin, LoginRequiredMixin, MensajeMixin, Creat
     def form_valid(self, form):
         respuesta = super().form_valid(form)
         # RF-15: al registrar una felicitación se avisa a coordinación.
-        if self.object.tipo == ReclamoFelicitacion.FELICITACION:
+        if respuesta.status_code == 302 and self.object.tipo == ReclamoFelicitacion.FELICITACION:
             for coordinador in Funcionario.objects.filter(rol__codigo=Rol.COORDINADOR, is_active=True):
                 Notificacion.objects.create(
                     destinatario=coordinador, registro=self.object,
@@ -666,6 +811,11 @@ class ReclamoDelete(ReclamoAlcanceMixin, RolRequeridoMixin, DeleteView):
     roles_permitidos = (Rol.ADMINISTRADOR, Rol.COORDINADOR)
     template_name = "core/confirmar_eliminar.html"
     success_url = reverse_lazy("reclamo_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs.pop('usuario', None)
+        return kwargs
 
 
 # ------------------------------------------------------------------ indicadores
