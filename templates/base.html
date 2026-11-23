@@ -45,7 +45,7 @@
       <a href="{% url 'login' %}" aria-label="Iniciar sesión · Ilustre Municipalidad de La Serena">
         <img class="municipal-logo" src="{% static 'core/img/municipalidad-la-serena.svg' %}" width="98" height="27" alt="Ilustre Municipalidad de La Serena">
       </a>
-      <h2>Sistema de Gestión de Resultados</h2>
+      {% block auth_brand_heading %}<h2>Sistema de Gestión de Resultados</h2>{% endblock %}
       <p>Delegaciones Municipales de La Serena</p>
     </div>
   </aside>
